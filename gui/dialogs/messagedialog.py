@@ -11,6 +11,7 @@ class MessageDialog():
         hbox = msg_dialog.vbox.get_children()[1]
         button_ok = hbox.get_children()[0] 
         button_ok.connect("activate", lambda w: msg_dialog.destroy())
+        button_ok.connect("clicked", lambda w: msg_dialog.destroy())
         return msg_dialog
 
     def info_dialog(self, parent, text):
