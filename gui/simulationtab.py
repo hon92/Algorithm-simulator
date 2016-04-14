@@ -69,6 +69,7 @@ class SimulationController():
         if not self.simulator.is_running():
             if not self.request_sim_dialog():
                 return
+            self.sim_tab.clear_plots()
             self.simulator.start()
             self.step_count = 1
             self._update_timers()
@@ -375,3 +376,10 @@ class SimulationTab(tab.CloseTab):
         self.win.disconnect(self.conf_handler_id)
         self.controller.stop()
         tab.CloseTab.on_close(self, w, t)
+
+    def clear_plots(self):
+        for ax in self.fig.axes:
+            lines = ax.get_lines()
+            for line in lines:
+                line.set_data([], [])
+        self.redraw()
