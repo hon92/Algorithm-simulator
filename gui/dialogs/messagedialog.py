@@ -10,7 +10,7 @@ class MessageDialog():
         msg_dialog.set_markup(text)
         hbox = msg_dialog.vbox.get_children()[1]
         button_ok = hbox.get_children()[0] 
-        button_ok.connect("button_press_event", lambda w, e: msg_dialog.destroy())
+        button_ok.connect("activate", lambda w: msg_dialog.destroy())
         return msg_dialog
 
     def info_dialog(self, parent, text):
