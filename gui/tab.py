@@ -305,5 +305,5 @@ class SimulationProgressTab(CloseTab):
     def on_close(self, w, tab):
         for sim in self.simulators:
             if sim.is_running():
-                sim.close()
+                sim.stop()
         CloseTab.on_close(self, w, tab)
