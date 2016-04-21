@@ -22,6 +22,66 @@ class PlotStatistics(statistics.Statistics):
             self.add_property("p{0}".format(p.id), display, val, self.sim_widget.statistics) 
         self.add_property("nodes_count", "Nodes count:", nodes_count, self.sim_widget.statistics)
 
+
+class Plot():
+    def __init__(self, fig):
+        self.fig = fig
+
+    def set_data(self, xdata, ydata, update = False):
+        pass
+
+    def redraw(self):
+        pass
+
+    def get_title(self):
+        return ""
+
+    def get_xlabel(self):
+        return "x"
+
+    def get_ylabel(self):
+        return "y"
+
+    def dispose(self):
+        pass
+
+
+class MemoryUsagePlot():
+    def __init__(self, fig):
+        Plot.__init__(self, fig)
+
+    def get_xlabel(self):
+        return "steps"
+
+    def get_ylabel(self):
+        return "size"
+
+    def get_title(self):
+        return "Memory usage"
+
+class CalculatedTimePlot():
+    def __init__(self, fig):
+        Plot.__init__(self, fig)
+
+    def get_xlabel(self):
+        return ""
+
+    def get_ylabel(self):
+        return ""
+
+    def get_title(self):
+        return "Processes times"
+    
+
+class ProcessPlots():
+    def __init__(self, fig):
+        self.plots = []
+
+    def add_plot(self, plot):
+        self.plots.append(plot)
+
+
+
 class SimPlotWidget(gtk.VBox):
     def __init__(self, simulation):
         gtk.VBox.__init__(self)

@@ -3,7 +3,7 @@ import tab
 import gtk
 import gobject
 import threading
-from dialogs import simulationdialog as simd, messagedialog as msgd
+from dialogs import simulationdialog as simd, messagedialog as msgd, multisimdialog as msimd
 from sim.simulation import Simulation
 from simulationtab import SimulationTab
 from dialogs.xmldialog import XMLDialog
@@ -81,25 +81,22 @@ class App():
     
             self.simulator.stop()
 
-            sim_dialog = simd.SimulationDialog(self.window, self.simulator.get_available_processor_types())
+            sim_dialog = msimd.MultiSimulationDialog(self.window,
+                                                     self.simulator.get_available_processor_types())
             result = sim_dialog.run()
             if result != gtk.RESPONSE_OK:
                 sim_dialog.destroy()
                 return
 
-            process_count = sim_dialog.get_process_count()
-            process_type = sim_dialog.get_process_type()
+            sim_data = sim_dialog.get_data()
             sim_dialog.destroy()
-            self.simulator.register_n_processes(process_type, process_count)
-
-            new_thread = threading.Thread(target= lambda:self.simulator.start())
-            new_thread.daemon = True
-            new_thread.start()
-
-            title = "Sim: {0}({1})".format(process_type, process_count)
-            progress_tab = tab.SimProgressBarTab(title, self.simulator, self.window)
-            self.window.create_tab(progress_tab)
-            progress_tab.start()
+            
+            if sim_data[0] > 0 and len(sim_data[1]) > 0:                
+                sim_progress_tab = tab.SimulationProgressTab("Simulation",
+                                                             self.window,
+                                                             self.project,
+                                                             sim_data)
+                self.window.create_tab(sim_progress_tab)
 
     def start_graphics_simulation(self):
         if self.project:

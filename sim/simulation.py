@@ -90,7 +90,10 @@ class Simulation(AbstractSimulation):
 
     def _run(self):
         self.fire("start_simulation", self)
-        sim_status = self.env.run()
+        try:
+            self.sim_status = self.env.run()
+        except Exception:
+            self.sim_status = "Canceled"
         self.fire("end_simulation", self)
 
         #print "Simulation status", "OK" if sim_status is None else "BAD (reason:" + str(sim_status) + ")"

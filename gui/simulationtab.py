@@ -188,6 +188,20 @@ class SimulationTab(tab.CloseTab):
             get_image("Restart-24.png"),             # icon widget
             lambda e: self.controller.restart()) # a signal
 
+        toolbar.append_item(
+            "Zoom in",           # button label
+            "Zoom in", # this button's tooltip
+            "Private",         # tooltip private info
+            get_image("Zoom In-24.png"),             # icon widget
+            lambda e: self.zoom(1, 10)) # a signal
+
+        toolbar.append_item(
+            "Zoom out",           # button label
+            "Zoom out", # this button's tooltip
+            "Private",         # tooltip private info
+            get_image("Zoom Out-24.png"),             # icon widget
+            lambda e: self.zoom(-1, 10)) # a signal
+
         return toolbar
 
     def _create_properties_panel(self):

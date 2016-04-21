@@ -156,8 +156,6 @@ class SVGVisibleGraphLoader(GraphLoader):
         polygon = self.solve_polygon(polygon)
         label = self.solve_text(text)
         destination_node = self.graph.get_node(destination)
-
-
         source_node = self.graph_model.get_node(source)
         sources_edges = [e for e in source_node.get_edges() if e.destination.name == destination and e.label == label[2]]
         model_edge = sources_edges[0]
