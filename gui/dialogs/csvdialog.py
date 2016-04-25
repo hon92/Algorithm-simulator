@@ -1,4 +1,5 @@
 import gtk
+import paths
 
 class CSVDialog():
     TITLE_OPEN = "Open csv file"
@@ -14,7 +15,7 @@ class CSVDialog():
                                         gtk.STOCK_OPEN,
                                         gtk.RESPONSE_OK))
         dialog.set_default_response(gtk.RESPONSE_OK)
-        dialog.set_current_folder("./")
+        dialog.set_current_folder(paths.ROOT)
         xml_file_filter = gtk.FileFilter()
         xml_file_filter.set_name("Csv files")
         xml_file_filter.add_pattern("*.csv")

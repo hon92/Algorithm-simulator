@@ -1,7 +1,7 @@
 from dot import DotGraphBuilder
 import graphloader
 import subprocess
-import sys
+import paths
 
 class Project():
     def __init__(self, project_file):
@@ -52,13 +52,7 @@ class Project():
         if not self.visible_graph:
             dot_builder = DotGraphBuilder(self)
             dot_builder.write()
-            dot_path = "C:\\Program Files (x86)\\Graphviz2.38\\bin\\"
-            dot_program = "dot.exe"
-            if sys.platform == "win32":
-                dot_app = '\"' + dot_path + dot_program + '\"'
-            else:
-                dot_app = "dot"
-
+            dot_app = paths.DOT_CMD_STRING
             dot_file = dot_builder.dot_file
             new_file = self.get_project_path() + self.get_project_name_without_extension() + ".svg"
             args = dot_app +  " -Tsvg " + dot_file + " -o" + new_file

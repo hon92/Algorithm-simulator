@@ -1,5 +1,6 @@
 import gtk
 import tab
+import paths
 
 class Window(gtk.Window):
     def __init__(self, app):
@@ -42,7 +43,7 @@ class Window(gtk.Window):
         def add_image_menu_item(parent_menu, label, callback, image_name):
             item = gtk.ImageMenuItem(label)
             image = gtk.Image()
-            icons_path = "../resources/icons/"
+            icons_path = paths.ICONS_PATH
             image.set_from_file(icons_path + image_name)
             image.show()
             item.set_image(image)

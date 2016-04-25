@@ -1,9 +1,11 @@
+import paths
+import sys
+sys.path.append(paths.ROOT)
 import window
 import tab
 import gtk
 import gobject
-import threading
-from dialogs import simulationdialog as simd, messagedialog as msgd, multisimdialog as msimd
+from dialogs import messagedialog as msgd, multisimdialog as msimd
 from sim.simulation import Simulation
 from simulationtab import SimulationTab
 from dialogs.xmldialog import XMLDialog

@@ -1,4 +1,5 @@
 import gtk
+import paths
 from misc import progressbar, timer
 from sim import plot, simulation
 from dialogs import csvdialog as csvd, messagedialog as msgd
@@ -139,13 +140,14 @@ class SimulationProgressTab(CloseTab):
 
     def _create_content(self):
         export_image = gtk.Image()
-        export_image.set_from_file("../resources/icons/CSV-24.png")
+        icons_path = paths.ICONS_PATH
+        export_image.set_from_file(icons_path + "CSV-24.png")
         
         cancel_image = gtk.Image()
-        cancel_image.set_from_file("../resources/icons/Close Window-24.png")
+        cancel_image.set_from_file(icons_path + "Close Window-24.png")
 
         show_image = gtk.Image()
-        show_image.set_from_file("../resources/icons/Show Property-24.png")
+        show_image.set_from_file(icons_path + "Show Property-24.png")
 
         self.export_button = gtk.Button()
         self.export_button.add(export_image)

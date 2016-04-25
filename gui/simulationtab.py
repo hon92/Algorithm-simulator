@@ -1,4 +1,5 @@
 import gtk
+import paths
 import tab
 import statistics
 from canvas import Canvas
@@ -153,7 +154,7 @@ class SimulationTab(tab.CloseTab):
 
         def get_image(icon_name):
             image = gtk.Image()
-            icons_path = "../resources/icons/"
+            icons_path = paths.ICONS_PATH
             image.set_from_file(icons_path + icon_name)
             image.show()
             return image

@@ -1,4 +1,5 @@
 import gtk
+import paths
 
 class XMLDialog():
     TITLE_OPEN = "Open xml file"
@@ -14,7 +15,7 @@ class XMLDialog():
                                         gtk.STOCK_OPEN,
                                         gtk.RESPONSE_OK))
         dialog.set_default_response(gtk.RESPONSE_OK)
-        dialog.set_current_folder("./")
+        dialog.set_current_folder(paths.ROOT)
         xml_file_filter = gtk.FileFilter()
         xml_file_filter.set_name("Xml files")
         xml_file_filter.add_pattern("*.xml")
