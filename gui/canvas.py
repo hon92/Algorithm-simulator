@@ -7,14 +7,14 @@ class Canvas(gtk.DrawingArea):
         gtk.DrawingArea.__init__(self)
         self.connect("configure_event", self.on_configure)
         self.connect("expose_event", self.on_expose)
-        self.zoom = 1
+        self.zoom = 1.0
         self.line_width = 2
         self.r = 0
         self.g = 0
         self.b = 0
         self.surface = None
 
-    def set_zoom(self, zoom = 1):
+    def set_zoom(self, zoom):
         self.zoom = zoom
 
     def get_zoom(self):
@@ -27,7 +27,7 @@ class Canvas(gtk.DrawingArea):
         self.r = r / 255.0
         self.b = b / 255.0
         self.g = g / 255.0
-    
+
     def repaint(self):
         self.queue_draw_area(0, 0, self.allocation.width, self.allocation.height)
 

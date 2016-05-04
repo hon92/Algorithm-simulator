@@ -1,8 +1,7 @@
 import simpy
 import monitor
-import gobject
 from processes import myprocess, spinprocess
-import events
+from gui import events
 
 class ProcessFactory():
     def __init__(self, env):
@@ -96,19 +95,6 @@ class Simulation(AbstractSimulation):
             self.sim_status = "Canceled"
         self.fire("end_simulation", self)
 
-        #print "Simulation status", "OK" if sim_status is None else "BAD (reason:" + str(sim_status) + ")"
-        #print "Simulation completed in time:", self.env.now
-
-        """
-        sum = 0
-        for p in self.processes:
-            sum += p.edges_calculated
-            print p.id, "q:", len(p.queue), "m:", len(p.messages), "calc:", p.edges_calculated
-        print "calc sum:", sum
-        not_found_nodes = [n for n in self.graph.nodes.values() if not n.is_discovered()]
-        print "graph:", "not found:", len(not_found_nodes)
-        """
-
     def stop(self):
         if self.is_running():
             for e in self.process_events:
@@ -126,6 +112,7 @@ class VisualSimulation(Simulation):
         self.register_event("step")
         self.register_event("visible_step")
         self.generator = None
+        self.visible_count = 0
 
     def _run(self):
         pass
@@ -136,6 +123,7 @@ class VisualSimulation(Simulation):
         self.fire("end_simulation", self)
 
     def prepare(self):
+        self.visible_count = 0
         self.graph.reset()
         self.prepare_processes()
         self.generator = self._create_generator()
@@ -160,13 +148,11 @@ class VisualSimulation(Simulation):
                 break
 
     def is_new_discovered(self):
-        found_new = False
-        for n in self.graph.nodes.values():
-            if n.is_discovered():
-                if not n.is_visible():
-                    n.set_visible(True)
-                    found_new = True
-        return found_new
+        curr = self.graph.get_discovered_nodes_count()
+        if curr != self.visible_count:
+            self.visible_count = curr
+            return True
+        return False
 
     def _create_generator(self):
         try:

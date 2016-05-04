@@ -1,5 +1,3 @@
-from dialogs import csvdialog
-
 
 class ExportDataModule():
     def __init__(self, simulator):
@@ -44,10 +42,12 @@ class CSVExportDataModule(ExportDataModule):
                 monitor = process.monitor
                 line = ";"
                 for m in monitor.monitors:
-                    list = monitor.monitors[m]
-                    if row_index < len(list):
-                        x, y = list[row_index]
-                        line += str(x) + ";" + str(y) + ";"
+                    x = monitor.monitors[m]["x"]
+                    y = monitor.monitors[m]["y"]
+                    if row_index < len(x):
+                        xval = x[row_index]
+                        yval = y[row_index]
+                        line += str(xval) + ";" + str(yval) + ";"
                         end = False
                     else:
                         line += ";" + ";"

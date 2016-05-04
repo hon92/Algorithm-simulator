@@ -1,8 +1,8 @@
 
 class DotGraphBuilder():
-    def __init__(self, project):
-        self.graph = project.get_graph()
-        self.dot_file = project.get_project_path() + project.get_project_name_without_extension() + ".dot"
+    def __init__(self, graph, dot_filename):
+        self.graph = graph
+        self.dot_file = dot_filename
 
     def _start(self):
         return "digraph g\n{\n"

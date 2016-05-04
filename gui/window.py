@@ -1,11 +1,14 @@
 import gtk
-import tab
+import pango
 import paths
+import settings
+from dialogs import txtdialog
 
 class Window(gtk.Window):
     def __init__(self, app):
         gtk.Window.__init__(self)
         self.app = app
+        self.console = Console(self)
         self._create_window()
 
     def _create_notebook(self):
@@ -13,17 +16,29 @@ class Window(gtk.Window):
         self.notebook.set_tab_pos(gtk.POS_TOP)
         return self.notebook
 
+    def set_title(self, text):
+        if text:
+            title = "{0} {1} '{2}'".format(settings.WINDOW_TITLE,
+                                           settings.VERSION,
+                                           text)
+        else:
+            title = "{0} {1}".format(settings.WINDOW_TITLE,
+                                     settings.VERSION)
+        return gtk.Window.set_title(self, title)
+
     def _create_window(self):
-        self.set_title("Process checker")
+        self.set_title("")
         self.set_position(gtk.WIN_POS_CENTER)
-        self.set_size_request(640, 480)
+        self.set_size_request(settings.WINDOW_WIDTH, settings.WINDOW_HEIGHT)
         self.connect("destroy", self.close)
 
         vbox = gtk.VBox()
         self.add(vbox)
         vbox.pack_start(self._create_menu(), False, False)
-        vbox.pack_start(self._create_notebook())
-        self.create_tab(tab.WelcomeTab("Welcome tab"))
+        vpaned = gtk.VPaned()
+        vpaned.pack1(self._create_notebook(), True, False)
+        vpaned.pack2(self.console, False, False)
+        vbox.pack_start(vpaned)
 
     def _create_menu(self):
         menu = gtk.MenuBar()
@@ -34,7 +49,7 @@ class Window(gtk.Window):
             item.set_submenu(m)
             menu.append(item)
             return m
-        
+
         def add_menu_item(parent_menu, label, callback):
             item = gtk.MenuItem(label)
             item.connect("activate", lambda w: callback())
@@ -49,10 +64,11 @@ class Window(gtk.Window):
             item.set_image(image)
             item.connect("activate", lambda w: callback())
             parent_menu.append(item)
-        
-        file_menu = add_menu("File")        
+
+        file_menu = add_menu("File")
+        add_image_menu_item(file_menu, "Create project", self.app.create_project, "Create New-24.png")
         add_image_menu_item(file_menu, "Open project", self.app.open_project, "Open Folder-24.png")
-        #add_image_menu_item(file_menu, "Save project", self.app.save_project, "Save-24.png")
+        add_image_menu_item(file_menu, "Save project", self.app.save_project, "Save-24.png")
         add_image_menu_item(file_menu, "Close project", self.app.close_project, "Close Window-24.png")
         add_image_menu_item(file_menu, "Settings", self.app.open_settings, "Settings-24.png")
         add_image_menu_item(file_menu, "Exit", self.app.close, "Exit-24.png")
@@ -67,9 +83,9 @@ class Window(gtk.Window):
             return
         self.notebook.append_page(tab, tab.get_tab_label())
         self.notebook.set_current_page(self.notebook.get_n_pages() - 1)
-        tab.notebook = self.notebook
+        tab.win = self
         if self.app.project:
-            self.app.project.tabs.append(tab)
+            self.app.project.opened_tabs.append(tab)
         return tab
 
     def show(self):
@@ -77,5 +93,75 @@ class Window(gtk.Window):
         
     def close(self, w):
         self.app.close()
-      
 
+class Console(gtk.HBox):
+    def __init__(self, window):
+        gtk.HBox.__init__(self)
+        self.win = window
+        self.buffer = gtk.TextBuffer()
+        self.textview = gtk.TextView(self.buffer)
+        font = pango.FontDescription(settings.CONSOLE_FONT)
+        self.textview.modify_font(font)
+        self.textview.set_editable(False)
+        self.buffer.create_tag("out", foreground = "black")
+        self.buffer.create_tag("err", foreground = "red")
+        self.buffer.create_tag("warn", foreground = "yellow")
+        self._create_content()
+
+    def _create_content(self):
+        def create_button(icon, tooltip, callback):
+            button = gtk.Button()
+            image = gtk.Image()
+            image.set_from_file(paths.ICONS_PATH + icon)
+            button.add(image)
+            button.set_tooltip_text(tooltip)
+            button.connect("clicked", lambda w: callback())
+            button.show_all()
+            return button
+            
+        clear_button = create_button("Delete-24 (1).png",
+                                          "Clear console",
+                                          self.clear)
+        export_button = create_button("exit.png",
+                                      "Export text from console",
+                                      self.export)
+
+        sw = gtk.ScrolledWindow()
+        sw.set_policy(gtk.POLICY_AUTOMATIC, gtk.POLICY_AUTOMATIC)
+        sw.set_shadow_type(gtk.SHADOW_IN)
+        sw.add(self.textview)
+        self.pack_start(sw)
+        vbox = gtk.VBox()
+        vbox.pack_start(clear_button, False, False)
+        vbox.pack_start(export_button, False, False)
+        self.pack_start(vbox, False, False)
+        self.set_size_request(-1, settings.CONSOLE_HEIGHT)
+
+    def write(self, text, tag = "out"):
+        self.buffer.insert_with_tags_by_name(self.buffer.get_end_iter(), text, tag)
+        self.scroll_to_end()
+
+    def writeln(self, text, tag = "out"):
+        self.buffer.insert_with_tags_by_name(self.buffer.get_end_iter(), text + "\n", tag)
+        self.scroll_to_end()
+
+    def clear(self):
+        self.buffer.set_text("")
+
+    def get_text(self):
+        si = self.buffer.get_start_iter()
+        ei = self.buffer.get_end_iter()
+        return self.buffer.get_text(si, ei)
+
+    def export(self):
+        text = self.get_text()
+        if text:
+            file = txtdialog.TXTDialog.save_as_file()
+            if file:
+                with open(file, "w") as f:
+                    f.write(text)
+                    f.flush()
+                self.writeln("Console text exported to " + file)
+
+    def scroll_to_end(self):
+        self.textview.scroll_mark_onscreen(self.buffer.get_insert())

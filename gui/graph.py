@@ -1,10 +1,14 @@
+from collections import deque
+
 class Graph():
     def __init__(self):
         self.nodes = {} # key -> node.id, value -> node
         self.root = None
+        self.edges_count = None
+        self.discovered_nodes_count = 0
 
     def set_root_node(self, name):
-        if self.nodes.has_key(name):
+        if name in self.nodes:
             self.root = self.nodes[name]
         else:
             raise Exception("Invalid root node")
@@ -13,43 +17,63 @@ class Graph():
         return self.root
 
     def add_node(self, node):
-        if not self.nodes.has_key(node.name):
+        if node.name not in self.nodes:
             self.nodes[node.name] = node
 
     def get_node(self, name):
-        if self.nodes.has_key(name):
+        if name in self.nodes:
             return self.nodes[name]
         return None
 
     def add_edge(self, node_name, edge):
-        if self.nodes.has_key(node_name):
+        if node_name in self.nodes:
             self.nodes[node_name].add_edge(edge)
 
     def get_edge(self, source_node, destination_node):
-        if self.nodes.has_key(source_node) and self.nodes.has_key(destination_node):
+        if source_node in self.nodes and destination_node in self.nodes:
             for edge in self.nodes[source_node].get_edges():
                 if edge.get_destination().name == destination_node:
                     return edge
         return None
 
     def reset(self):
-        for node in self.nodes.values():
+        self.discovered_nodes_count = 0
+        for n, node in self.nodes.iteritems():
             node.discover(-1)
             for edge in node.get_edges():
                 edge.discover(-1)
                 edge.complete(-1)
 
+    def get_nodes_count(self):
+        return len(self.nodes)
+
+    def get_edges_count(self):
+        if self.edges_count is not None:
+            return self.edges_count
+        edges = 0
+        for name, node in self.nodes.iteritems():
+            edges += len(node.get_edges())
+        self.edges_count = edges
+        return edges
+
+    def get_discovered_nodes_count(self):
+        return self.discovered_nodes_count
+
 class Node():
     def __init__(self, name, size):
         self.name = name
-        self.edges = []
+        self.edges = None
         self.size = size
         self.discovered_by = -1
 
     def get_edges(self):
+        if not self.edges:
+            return []
         return self.edges
 
     def add_edge(self, edge):
+        if not self.edges:
+            self.edges = []
         self.edges.append(edge)
 
     def get_size(self):
@@ -60,6 +84,8 @@ class Node():
 
     def discover(self, by):
         self.discovered_by = by
+        if by != -1:
+            self.graph.discovered_nodes_count += 1
 
     def get_discoverer(self):
         return self.discovered_by
@@ -68,7 +94,7 @@ class Node():
         return self.discovered_by != -1
 
     def is_completed(self):
-        for e in self.edges:
+        for e in self.get_edges():
             if not e.is_completed():
                 return False
         return True
@@ -113,20 +139,27 @@ class VisibleGraph(Graph):
         self.scale = scale
         self.width = width
         self.height = height
+        self.node_colors = [(155, 155, 155)]
 
     def draw(self, canvas):
-        for node in self.nodes.values():
+        for name, node in self.nodes.iteritems():
             node.draw(canvas)
 
     def reset(self):
-        for node in self.nodes.values():
+        self.discovered_nodes_count = 0
+        for n, node in self.nodes.iteritems():
             node.discover(-1)
             for edge in node.get_edges():
                 edge.discover(-1)
                 edge.complete(-1)
             node.set_visible(False)
         self.get_root().set_visible(True)
-            
+
+    def set_colors(self, colors):
+        del self.node_colors[1:]
+        for c in colors:
+            self.node_colors.append(c)
+
 class VisibleNode(Node):
     def __init__(self, name, complexity, x, y, width, height):
         Node.__init__(self, name, complexity)
@@ -135,8 +168,6 @@ class VisibleNode(Node):
         self.width = width
         self.height = height
         self.visible = False
-        self.discovered_by = None
-        self.succesors_count = 0
 
     def is_visible(self):
         return self.visible
@@ -144,27 +175,34 @@ class VisibleNode(Node):
     def set_visible(self, value):
         self.visible = value
 
-    def get_succesors_count(self):
-        return self.succesors_count
+    def discover(self, by):
+        Node.discover(self, by)
+        if by != -1:
+            self.set_visible(True)
 
     def draw(self, canvas):
-        if not self.is_visible():
-            return
-        r = 0
-        g = 150
-        b = 149
-        if self.discovered_by:
-            r += (self.discovered_by + 1) * 40
-            g += (self.discovered_by + 1) * 40
-        canvas.set_color(r, g, b)
-        canvas.draw_rectangle(self.x, self.y, self.width, self.height, True)
-        canvas.set_color(240, 255, 255)
-        canvas.draw_text(self.x + self.width/6, self.y + self.height/2, "'{0}'".format(self.name, self.get_size()))
-        canvas.draw_text(self.x, self.y + self.height, "{0}".format(self.succesors_count))
+        color = self.graph.node_colors[0]
+        name_color = (240, 255, 255)
 
-        for e in self.edges:
+        if self.is_visible():
+            if self.discovered_by != -1:
+                color = self.graph.node_colors[self.discovered_by + 1]
+
+        canvas.set_color(*color)
+        canvas.draw_rectangle(self.x,
+                              self.y,
+                              self.width,
+                              self.height,
+                              True)
+        canvas.set_color(*name_color)
+        canvas.draw_text(self.x + self.width / 6,
+                         self.y + self.height / 2,
+                         "'{0}'".format(self.name, self.get_size()))
+
+        for e in self.get_edges():
             if e.get_destination().is_visible():
-                e.draw(canvas)
+                e.set_visible(self.is_visible())
+            e.draw(canvas)
 
 class VisibleEdge(Edge):
     def __init__(self, destination, complexity, events_count, pids, label, lx, ly, points, arrow_polygon):
@@ -174,25 +212,33 @@ class VisibleEdge(Edge):
         self.label = label
         self.points = points
         self.arrow_polygon = arrow_polygon
+        self.visible = False
+
+    def set_visible(self, value):
+        self.visible = value
 
     def draw(self, canvas):
         completed_by = self.get_complete()
         discovered_by = self.get_discoverer()
+        text_color = (100, 75, 55)
+        arrow_color = (255, 255, 255)
+        edge_color = self.destination.graph.node_colors[0]
 
-        r = 0
-        g = 150
-        b = 149
-
-        if completed_by != -1 and discovered_by != -1:            
-            if self.discovered_by:
-                r += (self.discovered_by + 1) * 40
-                g += (self.discovered_by + 1) * 40
-            canvas.set_color(r, g, b)
-        else:
-            canvas.set_color(0, 0, 0)
+        if self.visible:
+            edge_color = self.destination.graph.node_colors[self.destination.discovered_by + 1]
+        
+        if self.discovered_by != -1:
+            edge_color = self.destination.graph.node_colors[self.discovered_by + 1]
+            c = 120 # brightness constant
+            edge_color = (int(edge_color[0] + c), int(edge_color[1] + c), int(edge_color[2] + c)) 
+        if self.completed_by != -1:
+            edge_color = self.destination.graph.node_colors[self.completed_by + 1]
 
         label = "({0})->({1})".format(discovered_by, completed_by)
+        canvas.set_color(*text_color)
         canvas.draw_text(self.label_x, self.label_y, label)
+        canvas.set_color(*arrow_color)
         canvas.draw_polygon(self.arrow_polygon, True)
+        canvas.set_color(*edge_color)
         canvas.draw_path(self.points)
-        
+

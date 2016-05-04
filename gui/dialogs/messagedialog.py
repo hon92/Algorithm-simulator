@@ -1,6 +1,5 @@
 import gtk
 
-
 class MessageDialog():
     def _create_message_dialog(self, parent, dtype, text):
         msg_dialog = gtk.MessageDialog(parent,

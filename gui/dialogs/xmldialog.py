@@ -23,13 +23,13 @@ class XMLDialog():
         try:
             response = dialog.run()
             if response == gtk.RESPONSE_OK:
-                    return dialog.get_file()
+                    return dialog.get_file().get_path()
             return None
         finally:
             dialog.destroy()
 
     @staticmethod
-    def save_file(file):
+    def save_file(filename):
         dialog = gtk.FileChooserDialog(XMLDialog.TITLE_WRITE,
                                        None,
                                        gtk.FILE_CHOOSER_ACTION_SAVE,
@@ -38,7 +38,7 @@ class XMLDialog():
                                         gtk.STOCK_SAVE,
                                         gtk.RESPONSE_OK))
         dialog.set_default_response(gtk.RESPONSE_OK)
-        dialog.set_file(file)
+        dialog.set_filename(filename)
         try:
             response = dialog.run()
             if response == gtk.RESPONSE_OK:

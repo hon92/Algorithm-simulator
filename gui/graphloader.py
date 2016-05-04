@@ -2,7 +2,7 @@ import xml.etree.cElementTree as ET
 from xml.etree.ElementTree import QName
 from gui import graph as g
 
-class GraphLoader():
+class AbstractGraphLoader():
     def __init__(self, filename):
         self.filename = filename
         self.tree = ET.parse(filename);
@@ -11,9 +11,6 @@ class GraphLoader():
 
     def get_root(self):
         return self.root
-
-    def s(self, text):
-        return str(QName("http://www.w3.org/2000/svg", text))
 
     def solve_graph(self, graph):
         pass
@@ -28,9 +25,9 @@ class GraphLoader():
         return self.graph
 
 
-class ProjectLoader(GraphLoader):
+class GraphLoader(AbstractGraphLoader):
     def __init__(self, filename):
-        GraphLoader.__init__(self, filename)
+        AbstractGraphLoader.__init__(self, filename)
         self.root_node_id = self.root.get("init-node-id")
         self.graph = g.Graph()
         self.arcs = []
@@ -57,6 +54,7 @@ class ProjectLoader(GraphLoader):
             self._solve_edge(node_id, arc)
 
         n = g.Node(node_id, size)
+        n.graph = self.graph
         self.graph.add_node(n)
 
     def _solve_edge(self, from_node, arc):
@@ -72,11 +70,14 @@ class ProjectLoader(GraphLoader):
         return g.Edge(n, time, events_count, pids, label)
 
 
-class SVGVisibleGraphLoader(GraphLoader):
+class SVGVisibleGraphLoader(AbstractGraphLoader):
     def __init__(self, graph, filename):
-        GraphLoader.__init__(self, filename)
+        AbstractGraphLoader.__init__(self, filename)
         self.graph_model = graph
         self.used_edges = []
+
+    def s(self, text):
+        return str(QName("http://www.w3.org/2000/svg", text))
 
     def load(self):
         root = self.get_root()
@@ -112,19 +113,17 @@ class SVGVisibleGraphLoader(GraphLoader):
             self.solve_node(node)
         for edge in edges_items:
             self.solve_edge(edge)
-        
-        
-        for n in self.graph.nodes.values():
-            if len(n.edges) > 1:
-                perm = [(e.time, e.label) for e in self.graph_model.get_node(n.name).edges]
-                old = n.edges
+
+        for name, n in self.graph.nodes.iteritems():
+            if len(n.get_edges()) > 1:
+                perm = [(e.time, e.label) for e in self.graph_model.get_node(name).edges]
+                old = n.get_edges()
                 edges = []
                 for p in perm:
                     f = [e for e in old if e.time == p[0] and e.label == p[1]]
                     edges.append(f[0])
                     old.remove(f[0])
                 n.edges = edges
-        
         self.graph.set_root_node(self.graph_model.root.name)
 
     def solve_node(self, node):
@@ -133,7 +132,6 @@ class SVGVisibleGraphLoader(GraphLoader):
         polygon = node.find(self.s("polygon"))
         text = node.find(self.s("text"))
         polygon = self.solve_polygon(polygon)
-        label = self.solve_text(text)
         x = polygon[2][0][0]
         y = polygon[2][0][1]
         w = polygon[2][1][0] - polygon[2][0][0]
@@ -141,6 +139,7 @@ class SVGVisibleGraphLoader(GraphLoader):
         x += w
         w = abs(w)
         node = g.VisibleNode(title.text, model_node.get_size(), x, y, w, h)
+        node.graph = self.graph
         self.graph.add_node(node)
         return node
 
@@ -157,10 +156,12 @@ class SVGVisibleGraphLoader(GraphLoader):
         label = self.solve_text(text)
         destination_node = self.graph.get_node(destination)
         source_node = self.graph_model.get_node(source)
-        sources_edges = [e for e in source_node.get_edges() if e.destination.name == destination and e.label == label[2]]
+        sources_edges = [e for e in source_node.get_edges() 
+                         if e.destination.name == destination and e.label == label[2]]
         model_edge = sources_edges[0]
-
-        edge = g.VisibleEdge(destination_node, model_edge.get_time(), model_edge.events_count, model_edge.pids, label[2], label[0], label[1], path[2], polygon[2])
+        edge = g.VisibleEdge(destination_node, model_edge.get_time(),
+                             model_edge.events_count, model_edge.pids,
+                             label[2], label[0], label[1], path[2], polygon[2])
         self.graph.add_edge(source, edge)
         return edge
 
@@ -175,30 +176,24 @@ class SVGVisibleGraphLoader(GraphLoader):
             x = float(coord[0]) + self.tr_x
             y = float(coord[1]) + self.tr_y
             coordinates.append((x, y))
-        polygon = (fill, stroke, coordinates)
-        return polygon
+        return (fill, stroke, coordinates)
     
     def solve_text(self, text):
         x = text.get("x")
         y = text.get("y")
         font_size = text.get("font-size")
         value = text.text
-        text = (float(x) - self.tr_x - 4.5, float(y) + self.tr_y, value, font_size)
-        return text
+        return (float(x) - self.tr_x - 4.5, float(y) + self.tr_y, value, font_size)
 
     def solve_path(self, path):
         fill = path.get("fill")
         stroke = path.get("stroke")
-        d = path.get("d")
-        d = d.replace("C", " ")
-        d = d.replace("M", "")
-
+        d = path.get("d").replace("C", " ").replace("M", "")
         coordinates = []
         for point in d.split(" "):
             coord = point.split(",")
             x = float(coord[0]) + self.tr_x
             y = float(coord[1]) + self.tr_y
             coordinates.append((x, y))
-
         return (fill, stroke, coordinates)
 

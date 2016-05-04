@@ -1,15 +1,17 @@
 import gtk
 import paths
+import settings
 import tab
 import statistics
+import matplotlib.pyplot as plt
 from canvas import Canvas
+from misc import utils
 from nodeselector import NodeSelector
 from sim.simulation import VisualSimulation
 from dialogs.simulationdialog import SimulationDialog
-import matplotlib.pyplot as plt
 from matplotlib.backends.backend_gtkagg import FigureCanvasGTKAgg as FigureCanvas
-from gobject import gobject
-
+from matplotlib import animation
+from misc import timer
 
 class SimulationStatistics(statistics.Statistics):
     def __init__(self, simulation_tab):
@@ -21,7 +23,6 @@ class SimulationStatistics(statistics.Statistics):
         panel = self.sim_tab.properties_panel
         self.add_property("name", "Name:", "", panel)
         self.add_property("size", "Size:", "", panel)
-        self.add_property("succesors", "Succesors:", "", panel)
         self.add_property("discovered_by", "Discovered by process:", "", panel)
 
         panel = self.sim_tab.statistics_panel
@@ -35,26 +36,23 @@ class SimulationStatistics(statistics.Statistics):
         self.update_property("name", node.get_name())
         self.update_property("size", node.get_size())
         self.update_property("discovered_by", node.get_discoverer())
-        self.update_property("succesors", node.get_succesors_count())
 
     def update_statistics(self):
         self.update_property("pr_count", len(self.sim_tab.simulator.processes))
         self.update_property("alg", self.sim_tab.simulator.processes[0].get_name())
         self.update_property("nodes_count", len(self.sim_tab.graph.nodes))
 
-
 class SimulationController():
+
     def __init__(self, sim_tab):
         self.simulator = sim_tab.simulator
-        self.win = sim_tab.win
         self.sim_tab = sim_tab
-        self.timer = None
-        self.running = False
-        self.step_count = 1
-        self.end_simulation = False
-
+        self.step_count = 0
+        self.timer = timer.Timer(settings.VIZ_SIMULATION_TIMER, self.step)
+        
     def request_sim_dialog(self):
-        sim_dialog = SimulationDialog(self.win, self.simulator.get_available_processor_types())
+        sim_dialog = SimulationDialog(self.sim_tab.win,
+                                      self.simulator.get_available_processor_types())
         result = sim_dialog.run()
         if result != gtk.RESPONSE_OK:
             sim_dialog.destroy()
@@ -66,66 +64,65 @@ class SimulationController():
         self.simulator.register_n_processes(process_type, process_count)
         return True
 
-    def _new_start(self):
-        if not self.simulator.is_running():
-            if not self.request_sim_dialog():
-                return
-            self.sim_tab.clear_plots()
-            self.simulator.start()
-            self.step_count = 1
-            self._update_timers()
-            self.sim_tab.sim_stats.update_statistics()
-            self.end_simulation = False
+    def set_graph_colors(self):
+        self.sim_tab.fig.gca().set_prop_cycle(None)
+        color_cycler = self.sim_tab.fig.gca()._get_lines.prop_cycler
+        colors = []
+        for i in xrange(len(self.simulator.processes)):
+            color_dict = next(color_cycler)
+            hex_color = color_dict["color"]
+            colors.append(utils.hex_to_rgb(hex_color))
+        self.sim_tab.graph.set_colors(colors)
 
     def _update_timers(self):
+        self.step_count += 1 
         self.sim_tab.sim_stats.update_property("step", self.step_count)
         self.sim_tab.sim_stats.update_property("sim_time", self.simulator.env.now)
 
-    def run(self, interval = 1000):
-        self._new_start()
-        self.running = True
-        self.timer = gobject.timeout_add(interval, self.step)
+    def run(self):
+        if not self.simulator.is_running():
+            if not self.request_sim_dialog():
+                return
+            self.step_count = 0
+            self.set_graph_colors()
+            self.simulator.start()
+            self.sim_tab.clear_plots()
+            self._update_timers()
+            self.sim_tab.sim_stats.update_statistics()
+            self.sim_tab.run_animated_plots()
+            self.timer.start()
 
     def step(self):
-        self._new_start()
-        val = self.simulator.visible_step()
-        if val:
+        if self.simulator.is_running():
+            self._step()
             self.sim_tab.redraw()
-            self.step_count += 1
             self._update_timers()
-            self.sim_tab.redraw_plot()
             return True
         else:
-            if not self.end_simulation:
-                self.sim_tab.redraw()
-                self.step_count += 1
-                self._update_timers()
-                self.sim_tab.redraw_plot()
-                self.end_simulation = True
             return False
 
+    def _step(self):
+        val = self.simulator.visible_step()
+        if not val:
+            self.simulator.running = False
+
     def stop(self):
-        if self.timer:
-            if self.running:
-                gobject.source_remove(self.timer)
-                self.running = False
+        self.timer.stop()
         self.simulator.stop()
 
     def restart(self):
         self.stop()
         self.simulator.graph.reset()
+        self.sim_tab.clear_plots()
         self.sim_tab.redraw()
 
-
-class SimulationTab(tab.CloseTab):
-    def __init__(self, project, window):
-        tab.CloseTab.__init__(self, project.get_project_name())
-        self.project = project
+class VizualSimulationTab(tab.CloseTab):
+    def __init__(self, title, visible_graph, window):
+        tab.CloseTab.__init__(self, title)
         self.win = window
-        self.figs = {}
         self.pack_start(self._create_content())
         self.sim_stats = SimulationStatistics(self)
-        self.graph = self.project.get_visible_graph()
+        self.graph = visible_graph
         self.simulator = VisualSimulation(self.graph)
         self.controller = SimulationController(self)
         self.canvas.connect("button_press_event", self.on_mouse_click)
@@ -138,8 +135,10 @@ class SimulationTab(tab.CloseTab):
         vbox.pack_start(self._create_toolbar(), False, False)
         self.properties_panel = self._create_properties_panel()
         hbox.pack_start(self.properties_panel, False, False)
-        hbox.pack_start(self._create_content_panel())
-        hbox.pack_start(self._create_right_panel(), False, False)
+        self.hpaned = gtk.HPaned()
+        self.hpaned.pack1(self._create_content_panel(), True, False)
+        self.hpaned.pack2(self._create_right_panel(), True, False)
+        hbox.pack_start(self.hpaned)
         vbox.pack_start(hbox)
         self.statistics_panel = self._create_statistics_panel()
         vbox.pack_start(self.statistics_panel, False, False)
@@ -194,14 +193,14 @@ class SimulationTab(tab.CloseTab):
             "Zoom in", # this button's tooltip
             "Private",         # tooltip private info
             get_image("Zoom In-24.png"),             # icon widget
-            lambda e: self.zoom(1, 10)) # a signal
+            lambda e: self.zoom(1)) # a signal
 
         toolbar.append_item(
             "Zoom out",           # button label
             "Zoom out", # this button's tooltip
             "Private",         # tooltip private info
             get_image("Zoom Out-24.png"),             # icon widget
-            lambda e: self.zoom(-1, 10)) # a signal
+            lambda e: self.zoom(-1)) # a signal
 
         return toolbar
 
@@ -214,13 +213,13 @@ class SimulationTab(tab.CloseTab):
 
     def _create_content_panel(self):
         canvas = Canvas()
-        canvas.set_events(gtk.gdk.BUTTON_PRESS_MASK | gtk.gdk.KEY_PRESS_MASK | gtk.gdk.KEY_RELEASE_MASK)
+        canvas.set_events(gtk.gdk.BUTTON_PRESS_MASK |
+                          gtk.gdk.KEY_PRESS_MASK |
+                          gtk.gdk.KEY_RELEASE_MASK)
         canvas.connect("configure_event", lambda w, e: self.redraw())
         sw = gtk.ScrolledWindow()
         sw.set_policy(gtk.POLICY_AUTOMATIC, gtk.POLICY_AUTOMATIC)
-        viewport = gtk.Viewport()
-        sw.add(viewport)
-        viewport.add(canvas)
+        sw.add_with_viewport(canvas)
         self.canvas = canvas
         return sw
 
@@ -235,70 +234,103 @@ class SimulationTab(tab.CloseTab):
 
         def create_plots():
             plots = gtk.VBox()
-            fig = plt.figure()
-            fig_canvas = FigureCanvas(fig)
-            fig_canvas.set_size_request(440,400)
-
-            ax1 = plt.subplot2grid((4, 1), (0, 0))
+            self.fig = plt.figure()
+            ax1 = self.fig.add_subplot(411)
             plt.tick_params(labelsize=8)
-            ax2 = plt.subplot2grid((4, 1), (1, 0))
+            ax2 = self.fig.add_subplot(412)
             plt.tick_params(labelsize=8)
-            ax3 = plt.subplot2grid((4, 1), (2, 0))
+            ax3 = self.fig.add_subplot(413)
             plt.tick_params(labelsize=8)
-            ax4 = plt.subplot2grid((4, 1), (3, 0))
+            ax4 = self.fig.add_subplot(414)
             plt.tick_params(labelsize=8)
-
             ax1.set_title("Memory uses", fontdict = {"fontsize":10})
             ax1.set_xlabel("time", fontdict = {"fontsize":10})
             ax1.set_ylabel("size", fontdict = {"fontsize":10})
-            
             ax2.set_title("Calculated", fontdict = {"fontsize":10})
             ax2.set_xlabel("time", fontdict = {"fontsize":10})
             ax2.set_ylabel("count", fontdict = {"fontsize":10})
-        
             ax3.set_title("Edges discovered", fontdict = {"fontsize":10})
             ax3.set_xlabel("time", fontdict = {"fontsize":10})
             ax3.set_ylabel("count", fontdict = {"fontsize":10})
-            
             ax4.set_title("Edges completed", fontdict = {"fontsize":10})
             ax4.set_xlabel("time", fontdict = {"fontsize":10})
             ax4.set_ylabel("count", fontdict = {"fontsize":10})
-
             plt.tight_layout(w_pad = -2.3)
-            self.fig = fig
+            fig_canvas = FigureCanvas(self.fig)
             plots.pack_start(fig_canvas)
-            
             return plots
 
         sw = gtk.ScrolledWindow()
-        view = gtk.Viewport()
         sw.set_policy(gtk.POLICY_AUTOMATIC, gtk.POLICY_AUTOMATIC)
-        sw.add(view)
-        view.add(create_plots())
-        
+        sw.add_with_viewport(create_plots())
+
         def on_configure(w,e):
             width = w.allocation.width
             height = w.allocation.height
             if width == e.width and height == e.height:
                 return
             sw.set_size_request(int(e.width * 0.3), int(e.height * 0.3))
+            self.hpaned.set_position(e.width - sw.allocation.width)
 
         self.conf_handler_id = self.win.connect("configure_event", on_configure)
         sw.set_size_request(int(self.win.allocation.width * 0.3),
                             int(self.win.allocation.height * 0.3))
+        self.hpaned.set_position(self.win.allocation.width - sw.allocation.width)
         return sw
 
-    def redraw_plot(self):
+    def run_animated_plots(self):
+        def gen():
+            i = 0
+            last_update = False
+            while True:
+                if last_update:
+                    break
+                if not self.controller.simulator.is_running():
+                    last_update = True
+                    yield i + 1
+                else:
+                    i += 1
+                    yield i
+
+        self.anim = animation.FuncAnimation(self.fig,
+                                            self.animate,
+                                            init_func = self.init_plots,
+                                            interval = 1000,
+                                            frames = gen,
+                                            repeat = False)
+        self.fig.canvas.draw()
+
+    def init_plots(self):
         axes = self.fig.axes
+        lines = []
+        def init_ax(index, label):
+            ax = axes[index]
+            line, = ax.plot([], [], label = label, marker = "o")
+            return line
+
+        for process in self.simulator.processes:
+            label = "p {0}".format(process.id)
+            lines.append(init_ax(0, label))
+            lines.append(init_ax(1, label))
+            lines.append(init_ax(2, label))
+            lines.append(init_ax(3, label))
+
+        for ax in self.fig.axes:
+            ax.set_prop_cycle(None)
+            ax.legend(prop = {"size":10})
+        plt.tight_layout(w_pad = -2.3)
+        return lines
+
+    def animate(self, i):
+        axes = self.fig.axes
+        lines = []
 
         def update_ax(index, xdata, ydata, line, label):
             ax = axes[index]
             lines = ax.get_lines()
-            if len(lines) < line:
-                ax.plot(xdata, ydata, label = label, marker = "o")
-                return
             l = lines[line - 1]
             l.set_data(xdata, ydata)
+            lines.append(l)
             ax.relim()
             ax.autoscale_view()
 
@@ -317,12 +349,8 @@ class SimulationTab(tab.CloseTab):
 
             xdata, ydata = mon.get_data("edge_completed")
             update_ax(3, xdata, ydata, line, "pc {0}".format(process.id))
-
             line += 1
-
-        for ax in axes:
-            ax.legend(prop = {"size":10})
-        self.fig.canvas.draw()
+        return lines
 
     def start(self):
         self.set_graph(self.graph)
@@ -337,30 +365,21 @@ class SimulationTab(tab.CloseTab):
     def zoom(self, dir = 1, step = 0.2):
         current_zoom = self.canvas.get_zoom()
         if dir == 1:
-            current_zoom += step
+            if current_zoom + step <= 1:
+                current_zoom += step
         else:
-            if current_zoom - step >= 0:
+            if round(current_zoom, 1) - step > 0.0:
                 current_zoom -= step
-            else:
-                current_zoom = 0
+
         self.canvas.set_zoom(current_zoom)
         self.redraw()
 
     def on_mouse_click(self, w, e):
-        """
-        if e.button == 3:
-            self.zoom(1)
-        elif e.button == 2:
-            self.zoom(-1)
-        """
         selected_node = self.node_selector.get_node_at(int(e.x), int(e.y))
 
         if selected_node:
             if e.button == 1:
                 self.update_node_info(selected_node)
-            #if e.button == 3:
-                #self.show_succesors(selected_node)
-                #selected_node.succesors_count = 0
             self.redraw()
 
     def set_graph(self, graph):
@@ -368,7 +387,6 @@ class SimulationTab(tab.CloseTab):
         self.graph = graph
         self.graph.reset()
         self.node_selector = NodeSelector(self.graph)
-        self.update_succesors_count(graph.get_root())
         self.redraw()
 
     def show_succesors(self, node):
@@ -380,21 +398,16 @@ class SimulationTab(tab.CloseTab):
     def update_node_info(self, node):
         self.sim_stats.update_node_properties(node)
 
-    def update_succesors_count(self, node):
-        succesors_count = 0
-        for e in node.get_edges():
-            if not e.get_destination().is_visible():
-                succesors_count += 1
-        node.succesors_count = succesors_count
-
     def on_close(self, w, t):
-        self.win.disconnect(self.conf_handler_id)
+        #self.win.disconnect(self.conf_handler_id)
         self.controller.stop()
+        self.fig.clf()
+        plt.close(self.fig)
         tab.CloseTab.on_close(self, w, t)
 
     def clear_plots(self):
         for ax in self.fig.axes:
-            lines = ax.get_lines()
-            for line in lines:
-                line.set_data([], [])
-        self.redraw()
+            for line in ax.get_lines():
+                line.remove()
+
+        self.fig.canvas.draw()

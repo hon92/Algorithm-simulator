@@ -8,7 +8,6 @@ class Timer():
         self.running = False
 
     def _tick(self):
-        self.running = True
         val = self.callback()
         if val:
             return True
@@ -18,6 +17,7 @@ class Timer():
 
     def start(self):
         self.timer = gobject.timeout_add(self.interval, self._tick)
+        self.running = True
 
     def stop(self):
         if self.timer:
