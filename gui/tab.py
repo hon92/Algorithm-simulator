@@ -124,8 +124,9 @@ class ProjectTab(Tab):
         if file:
             added = self.project.add_graph_file(file)
             if added:
-                graph = self.project.get_graph(file)
-                if not graph:
+                try:
+                    graph = self.project.get_graph(file)
+                except Exception as ex:
                     self.win.console.writeln(file
                                              + " is corrupted",
                                              "err")
