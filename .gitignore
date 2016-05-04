@@ -1,0 +1,4 @@
+*.pyc
+tests/
+
+gui/grafy/
