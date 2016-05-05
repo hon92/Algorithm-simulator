@@ -57,16 +57,20 @@ class App():
             if self.project:
                 self.close_project()
 
-            project = Project(project_file)
-            self._open_project(project)
-            self.window.console.writeln("Project " + project.get_project_name_without_extension()
+            try:
+                project = Project(project_file)
+                self._open_project(project)
+                self.window.console.writeln("Project " + project.get_project_name_without_extension()
                                                  + " was successfully opened")
+            except Exception as ex:
+                self.window.console.writeln("Project is corrupted", "err")
 
     def close_project(self):
         if self.project:
             self.project.close()
             self.window.set_title("")
             self.project = None
+            self.window.console.writeln("Project was closed")
 
     def save_project(self):
         if self.project:

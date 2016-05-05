@@ -77,8 +77,6 @@ class ProjectTab(Tab):
         box = self.builder.get_object("vbox")
         tv = self.builder.get_object("treeview")
         tv.set_property("hover-selection", True)
-        tv.set_property("enable-grid-lines", True)
-        tv.set_rules_hint(True)
         self.treeview = tv
         self.liststore = self.builder.get_object("liststore")
         self.pack_start(box)
