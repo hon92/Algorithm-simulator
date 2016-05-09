@@ -1,5 +1,6 @@
 import paths
 import sys
+from gui.exceptions import ProjectException
 sys.path.append(paths.ROOT)
 import gtk
 import window
@@ -15,7 +16,7 @@ class App():
     def __init__(self):
         self.project = None
         self.window = window.Window(self)
-        self.window.create_tab(tab.WelcomeTab("Welcome tab"))
+        self.window.create_tab(tab.WelcomeTab(self.window, "Welcome tab"))
 
     def run(self):
         self.window.show()
@@ -26,15 +27,16 @@ class App():
     def close(self):
         if self.project:
             self.close_project()
+            self.project = None
         gtk.main_quit()
 
     def _open_project(self, project):
         project.open()
-        self.window.set_title(project.get_project_name())
-        self.project = project
-        project_tab = tab.ProjectTab(project)
+        project_tab = tab.ProjectTab(self.window, project)
+        project.add_tab(project_tab)
         self.window.create_tab(project_tab)
         project_tab.load()
+        self.project = project
 
     def create_project(self):
         project_name = inputdialog.InputDialog("Insert project name", self.window).run()
@@ -62,7 +64,7 @@ class App():
                 self._open_project(project)
                 self.window.console.writeln("Project " + project.get_project_name_without_extension()
                                                  + " was successfully opened")
-            except Exception as ex:
+            except ProjectException as ex:
                 self.window.console.writeln("Project is corrupted", "err")
 
     def close_project(self):
@@ -90,8 +92,8 @@ class App():
 
     def start_simulation(self):
         if self.project:
-            self.project.project_tab.run_simulations()
+            self.project.get_project_tab().run_simulations()
 
     def start_graphics_simulation(self):
         if self.project:
-            self.project.project_tab.run_vizual_simulations()
+            self.project.get_project_tab().run_vizual_simulations()

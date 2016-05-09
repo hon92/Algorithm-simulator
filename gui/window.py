@@ -8,23 +8,13 @@ class Window(gtk.Window):
     def __init__(self, app):
         gtk.Window.__init__(self)
         self.app = app
-        self.console = Console(self)
+        self.console = Console()
         self._create_window()
 
     def _create_notebook(self):
         self.notebook = gtk.Notebook()
         self.notebook.set_tab_pos(gtk.POS_TOP)
         return self.notebook
-
-    def set_title(self, text):
-        if text:
-            title = "{0} {1} '{2}'".format(settings.WINDOW_TITLE,
-                                           settings.VERSION,
-                                           text)
-        else:
-            title = "{0} {1}".format(settings.WINDOW_TITLE,
-                                     settings.VERSION)
-        return gtk.Window.set_title(self, title)
 
     def _create_window(self):
         self.set_title("")
@@ -78,15 +68,31 @@ class Window(gtk.Window):
         add_image_menu_item(simulation_menu, "Run graphics sim", self.app.start_graphics_simulation, "Flow Chart-24.png")
         return menu
 
+    def set_title(self, text):
+        if text:
+            title = "{0} {1} '{2}'".format(settings.WINDOW_TITLE,
+                                           settings.VERSION,
+                                           text)
+        else:
+            title = "{0} {1}".format(settings.WINDOW_TITLE,
+                                     settings.VERSION)
+        return gtk.Window.set_title(self, title)
+
     def create_tab(self, tab):
         if not tab:
             return
         self.notebook.append_page(tab, tab.get_tab_label())
         self.notebook.set_current_page(self.notebook.get_n_pages() - 1)
-        tab.win = self
         if self.app.project:
-            self.app.project.opened_tabs.append(tab)
+            self.app.project.add_tab(tab)
         return tab
+
+    def remove_tab(self, tab):
+        page_number = self.notebook.page_num(tab)
+        if page_number != -1:
+            if self.app.project:
+                self.app.project.remove_tab(tab)
+            self.notebook.remove_page(page_number)
 
     def show(self):
         self.show_all()
@@ -95,9 +101,8 @@ class Window(gtk.Window):
         self.app.close()
 
 class Console(gtk.HBox):
-    def __init__(self, window):
+    def __init__(self):
         gtk.HBox.__init__(self)
-        self.win = window
         self.buffer = gtk.TextBuffer()
         self.textview = gtk.TextView(self.buffer)
         font = pango.FontDescription(settings.CONSOLE_FONT)

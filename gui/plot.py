@@ -60,6 +60,7 @@ class AbstactSimplePlot(AbstractPlot):
         self.axis.set_title(self.get_title())
         self.axis.set_xlabel(self.get_xlabel())
         self.axis.set_ylabel(self.get_ylabel())
+        self.axis.set_ymargin(0.2)
 
     def post_process(self):
         self.axis.legend(prop = {"size":12})
@@ -91,6 +92,7 @@ class AbstractMultiPlot(AbstractPlot):
         axis.set_xlabel(xlabel)
         axis.set_ylabel(ylabel)
         axis.set_title(title)
+        axis.set_ymargin(0.2)
         return axis
 
     def dispose(self):

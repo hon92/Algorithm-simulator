@@ -43,7 +43,6 @@ class SimulationStatistics(statistics.Statistics):
         self.update_property("nodes_count", len(self.sim_tab.graph.nodes))
 
 class SimulationController():
-
     def __init__(self, sim_tab):
         self.simulator = sim_tab.simulator
         self.sim_tab = sim_tab
@@ -110,6 +109,14 @@ class SimulationController():
         self.timer.stop()
         self.simulator.stop()
 
+    def pause(self):
+        if self.timer.is_running():
+            self.timer.stop()
+        else:
+            if self.simulator.is_running():
+                self.timer = timer.Timer(settings.VIZ_SIMULATION_TIMER, self.step)
+                self.timer.start()
+
     def restart(self):
         self.stop()
         self.simulator.graph.reset()
@@ -117,12 +124,13 @@ class SimulationController():
         self.sim_tab.redraw()
 
 class VizualSimulationTab(tab.CloseTab):
-    def __init__(self, title, visible_graph, window):
-        tab.CloseTab.__init__(self, title)
-        self.win = window
+    def __init__(self, window, title, project, visible_graph, filename):
+        tab.CloseTab.__init__(self, window, title)
+        self.project = project
         self.pack_start(self._create_content())
         self.sim_stats = SimulationStatistics(self)
         self.graph = visible_graph
+        self.filename = filename
         self.simulator = VisualSimulation(self.graph)
         self.controller = SimulationController(self)
         self.canvas.connect("button_press_event", self.on_mouse_click)
@@ -173,6 +181,13 @@ class VizualSimulationTab(tab.CloseTab):
             lambda e: self.controller.step()) # a signal
 
         toolbar.append_space() # space after item
+
+        toolbar.append_item(
+            "Pause",           # button label
+            "Pause simulation", # this button's tooltip
+            "Private",         # tooltip private info
+            get_image("Pause-24.png"),             # icon widget
+            lambda e: self.controller.pause()) # a signal
 
         toolbar.append_item(
             "Stop",           # button label
@@ -331,6 +346,7 @@ class VizualSimulationTab(tab.CloseTab):
             l = lines[line - 1]
             l.set_data(xdata, ydata)
             lines.append(l)
+            ax.set_ymargin(0.2)
             ax.relim()
             ax.autoscale_view()
 
@@ -389,21 +405,21 @@ class VizualSimulationTab(tab.CloseTab):
         self.node_selector = NodeSelector(self.graph)
         self.redraw()
 
-    def show_succesors(self, node):
-        for edge in node.get_edges():
-            destination_node = edge.get_destination()
-            destination_node.set_visible(True)
-            self.update_succesors_count(destination_node)
-
     def update_node_info(self, node):
         self.sim_stats.update_node_properties(node)
 
-    def on_close(self, w, t):
+    def close(self):
         #self.win.disconnect(self.conf_handler_id)
         self.controller.stop()
-        self.fig.clf()
         plt.close(self.fig)
-        tab.CloseTab.on_close(self, w, t)
+        self.project.graph_manager.return_graph(self.filename,
+                                                self.graph, True)
+        del self.simulator
+        del self.canvas
+        del self.graph
+        del self.project
+        del self.node_selector
+        tab.CloseTab.close(self)
 
     def clear_plots(self):
         for ax in self.fig.axes:

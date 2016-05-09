@@ -1,6 +1,7 @@
 import xml.etree.cElementTree as ET
 from xml.etree.ElementTree import QName
 from gui import graph as g
+from gui.exceptions import GraphException, VisibleGraphException
 
 class AbstractGraphLoader():
     def __init__(self, filename):
@@ -33,8 +34,11 @@ class GraphLoader(AbstractGraphLoader):
         self.arcs = []
 
     def load(self):
-        self.solve_graph(self.root)
-        return self.graph
+        try:
+            self.solve_graph(self.root)
+            return self.graph
+        except Exception as ex:
+            raise GraphException(ex.message)
 
     def solve_graph(self, graph):
         nodes = graph.findall("node")
@@ -80,17 +84,20 @@ class SVGVisibleGraphLoader(AbstractGraphLoader):
         return str(QName("http://www.w3.org/2000/svg", text))
 
     def load(self):
-        root = self.get_root()
-        width = root.get("width")
-        height = root.get("height")
-        viewbox = root.get("viewBox")
-        viewbox = viewbox.split(" ")
-        width = int(width[:-2])
-        height = int(height[:-2])
-        self.graph = g.VisibleGraph(1, width, height)
-        graph_item = root.find(self.s("g"))
-        self.solve_graph(graph_item)
-        return self.graph
+        try:
+            root = self.get_root()
+            width = root.get("width")
+            height = root.get("height")
+            viewbox = root.get("viewBox")
+            viewbox = viewbox.split(" ")
+            width = int(width[:-2])
+            height = int(height[:-2])
+            self.graph = g.VisibleGraph(1, width, height)
+            graph_item = root.find(self.s("g"))
+            self.solve_graph(graph_item)
+            return self.graph
+        except Exception as ex:
+            raise VisibleGraphException(ex.message)
 
     def solve_graph(self, graph):
         polygon = graph.find(self.s("polygon"))

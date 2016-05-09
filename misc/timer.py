@@ -23,6 +23,8 @@ class Timer():
         if self.timer:
             if self.running:
                 gobject.source_remove(self.timer)
-            self.timer = None
-            self.running = False
-            
+        self.timer = None
+        self.running = False
+
+    def is_running(self):
+        return self.running
