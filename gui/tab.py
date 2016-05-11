@@ -117,13 +117,13 @@ class ProjectTab(Tab):
                 graph = self.project.graph_manager.get_origin_graph(graph_file)
                 nodes = graph.get_nodes_count()
                 edges = graph.get_edges_count()
-                self.liststore.append([False, file, nodes, edges])
+                self.liststore.append([False, graph_file, nodes, edges])
                 info = "Added graph {0} nodes:{1}, edges:{2}"
-                self.win.console.writeln(info.format(file,
+                self.win.console.writeln(info.format(graph_file,
                                                      nodes,
                                                      edges))
             else:
-                self.win.console.writeln(file
+                self.win.console.writeln(graph_file
                                          + " is corrupted",
                                          "err")
 
