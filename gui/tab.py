@@ -1,15 +1,17 @@
 import gtk
 import paths
 import ntpath
-import threading
 import plot
 import exportmodule
 import settings
 from statistics import PlotStatistics
 from misc import timer
+from gui import worker
 from sim import simulation
+from collections import deque
 from dialogs import csvdialog as csvd, messagedialog as msgd, xmldialog as xmld
 from gui.exceptions import GraphException, VisibleGraphException
+
 
 class Tab(gtk.VBox):
     def __init__(self, window, title):
@@ -17,15 +19,16 @@ class Tab(gtk.VBox):
         self.win = window
         self.show()
         self.title_text = title
+        self.label = gtk.Label(self.title_text) 
 
     def set_title(self, title):
-        self.title_text = title
+        self.label.set_text(title)
 
     def get_title(self):
         return self.title_text
 
     def get_tab_label(self):
-        return gtk.Label(self.title_text)
+        return self.label
 
     def close(self):
         self.win.remove_tab(self)
@@ -50,7 +53,7 @@ class CloseTab(Tab):
 
     def get_tab_label(self):
         hbox = gtk.HBox()
-        hbox.pack_start(gtk.Label(self.title_text))
+        hbox.pack_start(self.label)
         hbox.pack_start(self.close_button, False, False)
         hbox.show_all()
         return hbox
@@ -69,32 +72,36 @@ class ProjectTab(Tab):
 
     def _create_content(self):
         glade_file = paths.GLADE_DIALOG_DIRECTORY + "project_tab.glade"
-        self.builder = gtk.Builder()
-        self.builder.add_from_file(glade_file)
-        box = self.builder.get_object("vbox")
-        tv = self.builder.get_object("treeview")
-        tv.set_property("hover-selection", True)
-        self.treeview = tv
-        self.liststore = self.builder.get_object("liststore")
-        self.pack_start(box)
+        builder = gtk.Builder()
+        builder.add_from_file(glade_file)
+
+        self.box = builder.get_object("vbox")
+        self.treeview = builder.get_object("treeview")
+        self.treeview.set_property("hover-selection", True)
+        self.liststore = builder.get_object("liststore")
+        self.toggle_render = builder.get_object("cellrenderertoggle1")
+        self.add_button = builder.get_object("add_button")
+        self.remove_button = builder.get_object("remove_button")
+        self.sim_button = builder.get_object("run_sim_button")
+        self.viz_button = builder.get_object("run_viz_button")
+        self.combobox = builder.get_object("combobox")
+        self.process_num_button = builder.get_object("process_num_button")
+        self.sim_num_button = builder.get_object("sim_num_button")
+        self.pack_start(self.box)
         self._connect_signals()
 
     def _connect_signals(self):
-        handler = {
-                   "on_add_button_clicked": lambda w: self.add_graph_file(),
-                   "on_remove_button_clicked": lambda w: self.remove_graph_file(),
-                   "on_run_sim_button_clicked": lambda w: self.run_simulations(),
-                   "on_run_viz_button_clicked": lambda w: self.run_vizual_simulations(),
-                   "selected_toggled": self.on_selected_toggled
-                   }
-        self.builder.connect_signals(handler)
+        self.toggle_render.connect("toggled", self.on_selected_toggled)
+        self.add_button.connect("clicked", lambda w: self.add_graph_file())
+        self.remove_button.connect("clicked", lambda w: self.remove_graph_file())
+        self.sim_button.connect("clicked", lambda w: self.run_simulations())
+        self.viz_button.connect("clicked", lambda w: self.run_vizual_simulations())
 
     def load(self):
         algorithms = ["MyProcess", "SPINProcess"]
-        combobox = self.builder.get_object("combobox")
         for alg in algorithms:
-            combobox.append_text(alg)
-        combobox.set_active(0)
+            self.combobox.append_text(alg)
+        self.combobox.set_active(0)
 
         for filename in self.project.get_files():
             graph = self.project.graph_manager.get_origin_graph(filename)
@@ -135,31 +142,30 @@ class ProjectTab(Tab):
                 self.liststore.remove(row.iter)
 
     def run_simulations(self):
-        process_type = self.builder.get_object("combobox").get_active_text()
-        process_count = self.builder.get_object("process_num_button").get_value_as_int()
-        sim_count = self.builder.get_object("sim_num_button").get_value_as_int()
-        data = []
+        process_type = self.combobox.get_active_text()
+        process_count = self.process_num_button.get_value_as_int()
+        sim_count = self.sim_num_button.get_value_as_int()
+        files = []
         try:
             for row in self.liststore:
                 if row[0]:
                     filename = row[1]
-                    graph = self.project.get_graph(filename)
-                    data.append((filename, graph))
+                    files.append(filename)
 
             sim_properties = {
                 "sim_count": sim_count,
                 "process_type": process_type,
                 "process_count": process_count,
-                "data": data
+                "files": files
             }
-            if len(data):
+            if len(files):
                 self.win.create_tab(SimulationProgressTab(self.win,
                                                           "Simulation",
                                                           self.project,
                                                           sim_properties))
         except GraphException as ex:
             self.win.console.writeln(ex.message, "err")
-                
+
     def run_vizual_simulations(self):
         for row in self.liststore:
             if row[0]:
@@ -170,15 +176,12 @@ class ProjectTab(Tab):
                     self.win.console.writeln(err_text, "err")
                     continue
                 try:
-                    visible_graph = self.project.get_visible_graph(row[1])
                     import simulationtab as st
                     title = "Viz. sim - " + ntpath.basename(row[1])
                     sim_tab = self.win.create_tab(st.VizualSimulationTab(self.win,
                                                                          title,
                                                                          self.project,
-                                                                         visible_graph,
                                                                          row[1]))
-                    sim_tab.start()
                 except VisibleGraphException as ex:
                     self.win.console.writeln(ex.message, "err")
 
@@ -232,40 +235,61 @@ class SimulatorTab(CloseTab):
         return vbox
 
     def close(self):
+        del self.plot_stats
         for p in self.plots:
             p.dispose()
         CloseTab.close(self)
 
 class SimulationProgressTab(CloseTab):
     PROGRESS_BAR_REFRESH_TIME = 100
+    RUNNING = "In progress"
+    CANCELED = "Canceled"
+    WAITING = "Pending"
+    COMPLETED = "Completed"
 
     def __init__(self, window, title, project, sim_properties):
         CloseTab.__init__(self, window, title)
         self.project = project
+        self.sim_props = sim_properties
         self.liststore = gtk.ListStore(str, int, str, float) # process type, progress, status, time
-        self.simulators = []
+        self.sim_q = deque()
         self.current_iter = -1
-        self.closed = False
+        self.sim = None
+        self.completed_simulations = {} # key -> index_row, val -> simulation
+        self.used_graphs = {}
         self.timer = timer.Timer(self.PROGRESS_BAR_REFRESH_TIME, self.on_timeout)
-        self._prepare_data(sim_properties, project)
         self._create_content()
+        self._prepare_data()
+        self.worker = worker.SimWorker()
+        self.worker.setDaemon(True)
+        self.worker.add_callback(lambda s: self.on_sim_complete(s, self.current_iter))
+        self.worker.start()
         self.start_next_sim()
 
-    def _prepare_data(self, sim_properties, project):
-        sim_count = sim_properties["sim_count"]
-        process_count = sim_properties["process_count"]
-        process_type = sim_properties["process_type"]
-        self.data = sim_properties["data"]
+    def _prepare_data(self):
+        sim_count = self.sim_props["sim_count"]
+        process_count = self.sim_props["process_count"]
+        process_type = self.sim_props["process_type"]
+        files = self.sim_props["files"]
+        
+        for filename in files:
+            self.used_graphs[filename] = self.project.graph_manager.get_graph(filename)
 
         for i in xrange(sim_count):
-            for file, graph in self.data:
+            for filename in files:
+                graph = self.used_graphs[filename]
                 simulator = simulation.Simulation(graph)
                 simulator.register_n_processes(process_type, process_count)
-                process_info = "{0} - {1}({2})".format(ntpath.basename(file),
+                for process in simulator.processes:
+                    process.connect("log", self._log_message)
+                process_info = "{0} - {1}({2})".format(ntpath.basename(filename),
                                                       process_type,
                                                       process_count)
-                self.liststore.append([process_info, 0, "PENDING", 0.0])
-                self.simulators.append(simulator)
+                self.liststore.append([process_info, 0, self.WAITING, 0.0])
+                self.sim_q.append(simulator)
+
+    def _log_message(self, msg, tag):
+        self.win.console.writeln(msg, tag)
 
     def _create_content(self):
         def create_button(icon, tooltip, callback):
@@ -344,26 +368,21 @@ class SimulationProgressTab(CloseTab):
         return treeview
 
     def start_next_sim(self):
-        if not self.closed and self.current_iter + 1 < len(self.simulators):
+        self.set_title("Simulation ({0}/{1})".format(self.current_iter + 1,
+                                                     self.sim_props["sim_count"] * 
+                                                     len(self.sim_props["files"])))
+        if len(self.sim_q):
+            self.sim = self.sim_q.pop()
             self.current_iter += 1
-            self.liststore[self.current_iter][2] = "In progress"
-            self.timer.start()
-            sim = self.simulators[self.current_iter]
-            sim.connect("end_simulation", lambda s: self.on_sim_complete(s, self.current_iter))
-            new_thread = threading.Thread(target = lambda: sim.start())
-            new_thread.daemon = True
-            try:
-                new_thread.start()
-            except Exception:
-                sim.stop()
-                self.win.console.write("LOW MEMORY", "err")
+            self.liststore[self.current_iter][2] = self.RUNNING
+            self.timer.restart()
+            self.worker.put(self.sim)
 
     def on_timeout(self):
-        if self.closed:
+        if not self.sim:
             return False
-        sim = self.simulators[self.current_iter]
-        nodes_count = sim.graph.get_nodes_count()
-        curr_nodes = sim.graph.get_discovered_nodes_count()
+        nodes_count = self.sim.graph.get_nodes_count()
+        curr_nodes = self.sim.graph.get_discovered_nodes_count()
         new_val = curr_nodes / float(nodes_count)
         self.liststore[self.current_iter][1] = int(new_val * 100)
         if new_val >= 1.0:
@@ -372,13 +391,13 @@ class SimulationProgressTab(CloseTab):
 
     def on_sim_complete(self, sim, iter):
         status = sim.sim_status
-        self.timer.stop()
         if not status:
-            self.liststore[iter][2] = "Completed"
+            self.liststore[iter][2] = self.COMPLETED
             self.liststore[iter][3] = sim.env.now
             self.liststore[iter][1] = 100
+            self.completed_simulations[iter] = sim
         else:
-            self.liststore[iter][2] = status
+            self.liststore[iter][2] = self.CANCELED
             self.liststore[iter][3] = -1
             self.liststore[iter][1] = 0
         self.start_next_sim()
@@ -386,16 +405,17 @@ class SimulationProgressTab(CloseTab):
     def on_cancel(self):
         index = self.get_selected_row_index()
         if index > -1:
-            sim = self.simulators[index]
-            if sim.is_running():
-                sim.stop()
-            del sim
+            if self.liststore[index][2] == self.RUNNING:
+                if self.sim:
+                    self.sim.stop()
 
     def on_export(self):
         index = self.get_selected_row_index()
         if index > -1:
-            if self.liststore[index][2] == "Completed":
-                sim = self.simulators[index]
+            if self.liststore[index][2] == self.COMPLETED:
+                if index not in self.completed_simulations:
+                    return
+                sim = self.completed_simulations[index]
                 new_file = csvd.CSVDialog.save_as_file()
                 if new_file:
                     if not new_file.get_path().endswith(".csv"):
@@ -410,12 +430,13 @@ class SimulationProgressTab(CloseTab):
     def on_show_results(self):
         index = self.get_selected_row_index()
         if index > -1:
-            if self.liststore[index][2] == "Completed":
-                sim = self.simulators[index]
-                title = self.liststore[index][0]
-                simulator_tab = SimulatorTab(self.win, title + "- Detail", sim)
-                self.win.create_tab(simulator_tab)
-                simulator_tab.create_plots()
+            if self.liststore[index][2] == self.COMPLETED:
+                if index in self.completed_simulations:
+                    sim = self.completed_simulations[index]
+                    title = self.liststore[index][0]
+                    simulator_tab = SimulatorTab(self.win, title + "- Detail", sim)
+                    self.win.create_tab(simulator_tab)
+                    simulator_tab.create_plots()
 
     def get_selected_row_index(self):
         tree_selection = self.treeview.get_selection()
@@ -432,14 +453,13 @@ class SimulationProgressTab(CloseTab):
         return self.liststore[index]
 
     def close(self):
-        if not self.closed:
-            self.timer.stop()
-            for sim in self.simulators:
-                if sim.is_running():
-                    sim.stop()
-            self.closed = True
-            del self.simulators
-            for filename, graph in self.data:
-                self.project.graph_manager.return_graph(filename, graph)
-            del self.data
+        self.timer.stop()
+        self.sim_q.clear()
+        if self.sim:
+            self.sim.stop()
+        del self.sim
+        self.worker.quit()
+        del self.worker
+        for f in self.used_graphs:
+            self.project.graph_manager.return_graph(f, self.used_graphs[f])
         CloseTab.close(self)

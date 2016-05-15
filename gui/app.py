@@ -27,16 +27,14 @@ class App():
     def close(self):
         if self.project:
             self.close_project()
-            self.project = None
         gtk.main_quit()
 
     def _open_project(self, project):
         project.open()
+        self.project = project
         project_tab = tab.ProjectTab(self.window, project)
-        project.add_tab(project_tab)
         self.window.create_tab(project_tab)
         project_tab.load()
-        self.project = project
 
     def create_project(self):
         project_name = inputdialog.InputDialog("Insert project name", self.window).run()
@@ -64,7 +62,7 @@ class App():
                 self._open_project(project)
                 self.window.console.writeln("Project " + project.get_project_name_without_extension()
                                                  + " was successfully opened")
-            except ProjectException as ex:
+            except ProjectException:
                 self.window.console.writeln("Project is corrupted", "err")
 
     def close_project(self):

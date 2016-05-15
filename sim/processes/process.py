@@ -1,6 +1,9 @@
+from gui.events import EventSource
 
-class Process():
+class Process(EventSource):
     def __init__(self, env):
+        EventSource.__init__(self)
+        self.register_event("log")
         self.env = env
         self.block_event = env.event()
         self.edges_calculated = 0
@@ -43,3 +46,5 @@ class Process():
     def get_calculated_time(self):
         return self.edges_calculated
 
+    def log(self, msg, tag = "out"):
+        self.fire("log", msg, tag)

@@ -4,6 +4,10 @@ from matplotlib import style
 style.use("fivethirtyeight")
 from matplotlib.backends.backend_gtkagg import FigureCanvasGTKAgg as FigureCanvas
 from matplotlib.backends.backend_gtkagg import NavigationToolbar2GTKAgg as NavigationToolbar
+from matplotlib import animation
+from cycler import cycler
+from misc import colors
+plt.rc("axes", prop_cycle = (cycler('color', colors.colors)))
 
 class AbstractPlot():
     def __init__(self):
@@ -27,6 +31,9 @@ class AbstractPlot():
         vbox.pack_start(toolbar, False, False)
         return vbox
 
+    def get_figure(self):
+        return self.figure
+
     def pre_process(self):
         pass
 
@@ -47,9 +54,6 @@ class AbstractPlot():
         if not self.disposed:
             plt.close(self.figure)
             self.disposed = True
-            for ax in self.figure.axes:
-                del ax
-            del self.figure
 
 class AbstactSimplePlot(AbstractPlot):
     def __init__(self):
@@ -130,7 +134,7 @@ class CalculatedBarPlot(AbstactSimplePlot):
         self.axis.set_prop_cycle(None)
         color_cycler = self.axis._get_lines.prop_cycler
         colors = []
-        for i in xrange(len(self.simulator.processes)):
+        for _ in xrange(len(self.simulator.processes)):
             color_dict = next(color_cycler)
             hex_color = color_dict["color"]
             colors.append(hex_color)
@@ -167,6 +171,8 @@ class ProcessPlot(AbstractMultiPlot):
         self.axis2 = self.add_subplot(2, 1, 4, "step", "size", "Memory push")
         self.axis3 = self.add_subplot(3, 1, 4, "step", "size", "Memory pop")
         self.axis4 = self.add_subplot(4, 1, 4, "step", "edge", "Edges")
+        for ax in self.figure.axes:
+            ax.tick_params(labelsize=10)
 
     def draw_plot(self):
         label = "process {0}".format(self.process.id)
@@ -189,3 +195,67 @@ class ProcessPlot(AbstractMultiPlot):
 
     def get_title(self):
         return "Process id - {0}".format(self.process.id)
+
+class VizualSimPlot(AbstractMultiPlot):
+    def __init__(self):
+        AbstractMultiPlot.__init__(self)
+
+    def pre_process(self):
+        font = {"fontsize":10}
+        self.axis1 = self.add_subplot(1, 1, 4)
+        self.axis1.set_title("Memory uses", fontdict = font)
+        self.axis1.set_xlabel("size", fontdict = font)
+        self.axis1.set_ylabel("time", fontdict = font)
+        self.axis2 = self.add_subplot(2, 1, 4)
+        self.axis2.set_title("Calculated", fontdict = font)
+        self.axis2.set_xlabel("time", fontdict = font)
+        self.axis2.set_ylabel("count", fontdict = font)
+        self.axis3 = self.add_subplot(3, 1, 4)
+        self.axis3.set_title("Edges discovered", fontdict = font)
+        self.axis3.set_xlabel("time", fontdict = font)
+        self.axis3.set_ylabel("count", fontdict = font)
+        self.axis4 = self.add_subplot(4, 1, 4)
+        self.axis4.set_title("Edges completed", fontdict = font)
+        self.axis4.set_xlabel("time", fontdict = font)
+        self.axis4.set_ylabel("count", fontdict = font)
+        for ax in self.figure.axes:
+            ax.tick_params(labelsize=8)
+
+    def post_process(self):
+        self.figure.tight_layout(w_pad = -2.3)
+
+class AnimPlot(AbstractPlot):
+    REFRESH_INTERVAL = 1000
+
+    def __init__(self, plot, init_cb, anim_cb, frames):
+        AbstractPlot.__init__(self)
+        self.plot = plot
+        self.anim_cb = anim_cb
+        self.init_cb = init_cb
+        self.frames = frames
+
+    def get_widget(self):
+        return self.plot.get_widget()
+
+    def start(self):
+        self.plot.draw()
+        self.anim = animation.FuncAnimation(self.plot.figure,
+                                            self.anim_cb,
+                                            init_func = self.init_cb,
+                                            interval = self.REFRESH_INTERVAL,
+                                            frames = self.frames,
+                                            repeat = False)
+        self.get_figure().canvas.draw()
+
+    def get_figure(self):
+        return self.plot.get_figure()
+
+    def dispose(self):
+        AbstractPlot.dispose(self)
+
+class VizualSimPlotAnim(AnimPlot):
+    def __init__(self, init_cb, anim_cb, frames_gen):
+        AnimPlot.__init__(self, VizualSimPlot(),
+                          init_cb,
+                          anim_cb,
+                          frames_gen)

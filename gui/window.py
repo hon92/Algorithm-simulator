@@ -4,6 +4,7 @@ import paths
 import settings
 from dialogs import txtdialog
 
+
 class Window(gtk.Window):
     def __init__(self, app):
         gtk.Window.__init__(self)
@@ -79,8 +80,6 @@ class Window(gtk.Window):
         return gtk.Window.set_title(self, title)
 
     def create_tab(self, tab):
-        if not tab:
-            return
         self.notebook.append_page(tab, tab.get_tab_label())
         self.notebook.set_current_page(self.notebook.get_n_pages() - 1)
         if self.app.project:
@@ -93,6 +92,8 @@ class Window(gtk.Window):
             if self.app.project:
                 self.app.project.remove_tab(tab)
             self.notebook.remove_page(page_number)
+            tab.destroy()
+            del tab
 
     def show(self):
         self.show_all()
@@ -142,13 +143,18 @@ class Console(gtk.HBox):
         self.pack_start(vbox, False, False)
         self.set_size_request(-1, settings.CONSOLE_HEIGHT)
 
+    def _write_to_buffer(self, text, tag, scroll_end = True):
+        self.buffer.insert_with_tags_by_name(self.buffer.get_end_iter(),
+                                             text,
+                                             tag)
+        if scroll_end:
+            self.scroll_to_end()
+
     def write(self, text, tag = "out"):
-        self.buffer.insert_with_tags_by_name(self.buffer.get_end_iter(), text, tag)
-        self.scroll_to_end()
+        gtk.idle_add(lambda: self._write_to_buffer(text, tag))
 
     def writeln(self, text, tag = "out"):
-        self.buffer.insert_with_tags_by_name(self.buffer.get_end_iter(), text + "\n", tag)
-        self.scroll_to_end()
+        self.write(text + "\n", tag)
 
     def clear(self):
         self.buffer.set_text("")
@@ -161,12 +167,12 @@ class Console(gtk.HBox):
     def export(self):
         text = self.get_text()
         if text:
-            file = txtdialog.TXTDialog.save_as_file()
-            if file:
-                with open(file, "w") as f:
+            filename = txtdialog.TXTDialog.save_as_file()
+            if filename:
+                with open(filename, "w") as f:
                     f.write(text)
                     f.flush()
-                self.writeln("Console text exported to " + file)
+                self.writeln("Console text exported to " + filename)
 
     def scroll_to_end(self):
         self.textview.scroll_mark_onscreen(self.buffer.get_insert())

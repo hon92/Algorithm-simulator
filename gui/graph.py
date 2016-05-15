@@ -1,4 +1,3 @@
-from collections import deque
 
 class Graph():
     def __init__(self):
@@ -38,7 +37,7 @@ class Graph():
 
     def reset(self):
         self.discovered_nodes_count = 0
-        for n, node in self.nodes.iteritems():
+        for _, node in self.nodes.iteritems():
             node.discover(-1)
             for edge in node.get_edges():
                 edge.discover(-1)
@@ -51,7 +50,7 @@ class Graph():
         if self.edges_count is not None:
             return self.edges_count
         edges = 0
-        for name, node in self.nodes.iteritems():
+        for _, node in self.nodes.iteritems():
             edges += len(node.get_edges())
         self.edges_count = edges
         return edges
@@ -142,12 +141,12 @@ class VisibleGraph(Graph):
         self.node_colors = [(155, 155, 155)]
 
     def draw(self, canvas):
-        for name, node in self.nodes.iteritems():
+        for _, node in self.nodes.iteritems():
             node.draw(canvas)
 
     def reset(self):
         self.discovered_nodes_count = 0
-        for n, node in self.nodes.iteritems():
+        for _, node in self.nodes.iteritems():
             node.discover(-1)
             for edge in node.get_edges():
                 edge.discover(-1)

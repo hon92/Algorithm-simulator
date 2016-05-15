@@ -105,7 +105,7 @@ class Canvas(gtk.DrawingArea):
         ctx.move_to(path[0][0], path[0][1])
         p = (len(path) - 1) / 3
         i = 1
-        for ii in xrange(p):
+        for _ in xrange(p):
             ctx.curve_to(path[i][0], path[i][1],
                          path[i + 1][0], path[i + 1][1],
                          path[i + 2][0], path[i + 2][1],                         
@@ -154,3 +154,6 @@ class Canvas(gtk.DrawingArea):
                 # Get the intersection point.
                 return ((x1 + ua * (x2 - x1)), (y1 + ua * (y2 - y1)));
         return (x2,y2)
+
+    def dispose(self):
+        self.surface = None

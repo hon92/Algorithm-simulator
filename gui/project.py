@@ -7,8 +7,8 @@ class Project():
     def __init__(self, project_file):
         self.project_file = project_file
         self.name = ""
-        self.project_loader = pl.ProjectLoader(project_file)
         self.opened_tabs = []
+        self.project_loader = pl.ProjectLoader(project_file)
         self.graph_manager = graphmanager.GraphManager()
 
     @staticmethod
@@ -63,9 +63,6 @@ class Project():
     def close(self):
         for t in reversed(self.opened_tabs):
             t.close()
-        files = self.get_files()
-        for filename in files:
-            self.graph_manager.unregister_graph(filename)
 
     def add_graph_file(self, filename):
         return self.graph_manager.register_graph(filename)

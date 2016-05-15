@@ -13,9 +13,9 @@ class CSVExportDataModule(ExportDataModule):
     def __init__(self, simulator):
         ExportDataModule.__init__(self, simulator)
 
-    def print_to_file(self, file):
-        if file:
-            with open(file.get_path(), "w") as f:
+    def print_to_file(self, filename):
+        if filename:
+            with open(filename.get_path(), "w") as f:
                 for row in self.get_data():
                     f.write(row)
                 f.flush()

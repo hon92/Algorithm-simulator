@@ -91,14 +91,17 @@ class Simulation(AbstractSimulation):
         self.fire("start_simulation", self)
         try:
             self.sim_status = self.env.run()
-        except Exception:
+        except simpy.core.StopSimulation:
             self.sim_status = "Canceled"
         self.fire("end_simulation", self)
 
     def stop(self):
         if self.is_running():
             for e in self.process_events:
-                e.fail(simpy.core.StopSimulation("Sim stopped"))
+                try:
+                    e.fail(simpy.core.StopSimulation("Sim stopped"))
+                except Exception:
+                    pass
         del self.processes[:]
         self.env._now = 0
 

@@ -28,3 +28,7 @@ class Timer():
 
     def is_running(self):
         return self.running
+
+    def restart(self):
+        self.stop()
+        self.start()

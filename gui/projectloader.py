@@ -1,4 +1,4 @@
-from xml.etree.cElementTree import Element, SubElement, parse, tostring
+from xml.etree.cElementTree import Element, SubElement, parse
 from xml.etree import ElementTree
 from xml.dom import minidom
 
@@ -18,8 +18,8 @@ class ProjectLoader():
         files_node = root.find("files")
         files_nodes = files_node.findall("file")
         files = []
-        for file in files_nodes:
-            path = file.get("path")
+        for filename in files_nodes:
+            path = filename.get("path")
             if path:
                 files.append(path)
         return (project_name, files)
@@ -29,9 +29,9 @@ class ProjectLoader():
             root = Element("project")
             root.set("name", name)
             files_node = SubElement(root, "files")
-            for file in files:
+            for filename in files:
                 f_node = SubElement(files_node, "file")
-                f_node.set("path", file)
+                f_node.set("path", filename)
         
             with open(self.filename, "w") as f:
                 f.write(get_pretty_xml(root))
