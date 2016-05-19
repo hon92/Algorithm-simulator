@@ -1,13 +1,18 @@
 import gtk
+import matplotlib as mpl
 import matplotlib.pyplot as plt
 from matplotlib import style
 style.use("fivethirtyeight")
 from matplotlib.backends.backend_gtkagg import FigureCanvasGTKAgg as FigureCanvas
 from matplotlib.backends.backend_gtkagg import NavigationToolbar2GTKAgg as NavigationToolbar
 from matplotlib import animation
-from cycler import cycler
 from misc import colors
-plt.rc("axes", prop_cycle = (cycler('color', colors.colors)))
+
+if mpl.__version__ >= 1.5:
+    from cycler import cycler
+    plt.rc("axes", prop_cycle = (cycler('color', colors.colors)))
+else:
+    plt.rc("axes", color_cycle = colors.colors)
 
 class AbstractPlot():
     def __init__(self):
