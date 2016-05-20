@@ -8,7 +8,9 @@ from matplotlib.backends.backend_gtkagg import NavigationToolbar2GTKAgg as Navig
 from matplotlib import animation
 from misc import colors
 
-if mpl.__version__ >= 1.5:
+version = int(mpl.__version__.replace(".", ""))
+
+if version >= 150:
     from cycler import cycler
     plt.rc("axes", prop_cycle = (cycler('color', colors.colors)))
 else:
