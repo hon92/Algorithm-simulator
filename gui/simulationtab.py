@@ -8,7 +8,7 @@ from nodeselector import NodeSelector
 from statistics import SimulationStatistics
 from sim.simulation import VisualSimulation
 from dialogs.simulationdialog import SimulationDialog
-from plot import VizualSimPlotAnim
+from plot import VizualSimPlotAnim, set_ax_color
 from misc import timer, colors as color_palette
 
 class SimulationController():
@@ -274,7 +274,7 @@ class VizualSimulationTab(tab.CloseTab):
             lines.append(init_ax(3, label))
 
         for ax in fig.axes:
-            ax.set_prop_cycle(None)
+            set_ax_color(ax)
             ax.legend(prop = {"size": 10})
         return lines
 

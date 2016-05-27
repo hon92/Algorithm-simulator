@@ -6,15 +6,22 @@ style.use("fivethirtyeight")
 from matplotlib.backends.backend_gtkagg import FigureCanvasGTKAgg as FigureCanvas
 from matplotlib.backends.backend_gtkagg import NavigationToolbar2GTKAgg as NavigationToolbar
 from matplotlib import animation
-from misc import colors
+from misc import colors as color_pallete
+from misc import utils
 
 version = int(mpl.__version__.replace(".", ""))
 
 if version >= 150:
     from cycler import cycler
-    plt.rc("axes", prop_cycle = (cycler('color', colors.colors)))
+    plt.rc("axes", prop_cycle = (cycler('color', color_pallete.colors)))
 else:
-    plt.rc("axes", color_cycle = colors.colors)
+    plt.rc("axes", color_cycle = color_pallete.colors)
+
+def set_ax_color(ax):
+    if version >= 150:
+        ax.set_prop_cycle(cycler("color", color_pallete.colors))
+    else:
+        ax.set_color_cycle(color_pallete.colors)
 
 class AbstractPlot():
     def __init__(self):
@@ -138,13 +145,11 @@ class CalculatedBarPlot(AbstactSimplePlot):
         self.simulator = simulator
 
     def draw_plot(self):
-        self.axis.set_prop_cycle(None)
-        color_cycler = self.axis._get_lines.prop_cycler
+        set_ax_color(self.axis)
+        cc = color_pallete.new_color_cycler()
         colors = []
         for _ in xrange(len(self.simulator.processes)):
-            color_dict = next(color_cycler)
-            hex_color = color_dict["color"]
-            colors.append(hex_color)
+            colors.append(next(cc))
 
         def autolabel(rects):
             for rect in rects:
