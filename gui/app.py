@@ -37,8 +37,8 @@ class App():
         project_tab.load()
 
     def create_project(self):
-        project_name = inputdialog.InputDialog("Insert project name", self.window).run()
-        if project_name:
+        project_name = XMLDialog.save_as_file()
+        if project_name and project_name.endswith(".xml"):
             if self.project:
                 self.project.close()
 
@@ -46,10 +46,9 @@ class App():
             project.set_name(project_name)
             project.save()
             self._open_project(project)
-            
-            self.window.console.writeln("Project "
-                                           + project.get_project_name_without_extension()
-                                           + " was created")
+            self.window.console.writeln("Project was created in " + project_name)
+        else:
+            self.window.console.writeln("Project invalid name")
 
     def open_project(self):
         project_file = XMLDialog.open_file()

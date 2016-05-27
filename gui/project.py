@@ -1,4 +1,3 @@
-import paths
 import projectloader as pl
 import graphmanager
 from gui.exceptions import ProjectException
@@ -12,9 +11,8 @@ class Project():
         self.graph_manager = graphmanager.GraphManager()
 
     @staticmethod
-    def create_empty_project(name):
-        new_file = paths.ROOT + "\\" + name + ".xml"
-        return Project(new_file)
+    def create_empty_project(filename):
+        return Project(filename)
 
     def set_name(self, name):
         self.name = name

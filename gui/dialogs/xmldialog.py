@@ -55,3 +55,27 @@ class XMLDialog():
             return False
         finally:
             dialog.destroy()
+
+    @staticmethod
+    def save_as_file():
+        dialog = gtk.FileChooserDialog(XMLDialog.TITLE_WRITE,
+                                       None,
+                                       gtk.FILE_CHOOSER_ACTION_SAVE,
+                                       (gtk.STOCK_CANCEL,
+                                        gtk.RESPONSE_CANCEL,
+                                        gtk.STOCK_SAVE,
+                                        gtk.RESPONSE_OK))
+        dialog.set_default_response(gtk.RESPONSE_OK)
+        dialog.set_current_folder(paths.ROOT)
+        xml_file_filter = gtk.FileFilter()
+        xml_file_filter.set_name("Xml files")
+        xml_file_filter.add_pattern("*.xml")
+        dialog.set_filter(xml_file_filter)
+        
+        try:
+            response = dialog.run()
+            if response == gtk.RESPONSE_OK:
+                return dialog.get_file().get_path()
+            return None
+        finally:
+            dialog.destroy()
