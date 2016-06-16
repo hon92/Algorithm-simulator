@@ -1,22 +1,27 @@
 import paths
 import sys
-from gui.exceptions import ProjectException
 sys.path.append(paths.ROOT)
 import gtk
 import window
 import tab
 import gobject
+import appargs
 from dialogs import inputdialog
 from dialogs.xmldialog import XMLDialog
 from project import Project
+from gui.exceptions import ProjectException
+from sim.processes import process
 
 gobject.threads_init()
+process.load()
 
 class App():
-    def __init__(self):
+    def __init__(self, args):
         self.project = None
         self.window = window.Window(self)
         self.window.create_tab(tab.WelcomeTab(self.window, "Welcome tab"))
+        self.app_args = appargs.AppArgs(self, args)
+        self.app_args.solve()
 
     def run(self):
         self.window.show()
@@ -50,8 +55,10 @@ class App():
         else:
             self.window.console.writeln("Project invalid name")
 
-    def open_project(self):
-        project_file = XMLDialog.open_file()
+    def open_project(self, project_file = None):
+        if not project_file:
+            project_file = XMLDialog.open_file()
+
         if project_file:
             if self.project:
                 self.close_project()

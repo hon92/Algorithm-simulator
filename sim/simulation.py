@@ -1,22 +1,17 @@
 import simpy
 import monitor
-from processes import myprocess, spinprocess
+from processes import process
 from gui import events
 
 class ProcessFactory():
     def __init__(self, env):
         self.env = env
-        self.types = {"MyProcess": myprocess.MyProcess,
-                      "SPINProcess": spinprocess.SPINProcess
-                     }
 
     def create_process(self, process_type):
-        if self.types.has_key(process_type):
-            return self.types[process_type](self.env);
+        for pr in process._loaded_classes:
+            if pr.__name__ == process_type:
+                return pr(self.env)
         return None
-
-    def get_types(self):
-        return self.types
 
 class AbstractSimulation(events.EventSource):
     def __init__(self):
@@ -73,7 +68,7 @@ class Simulation(AbstractSimulation):
             self.register_process(process_type)
 
     def get_available_processor_types(self):
-        return [t for t in self.process_factory.get_types()]
+        return process.get_process_names()
 
     def prepare_processes(self):
         self._reset_process_id()
@@ -166,5 +161,5 @@ class VisualSimulation(Simulation):
                 yield step
         except simpy.core.EmptySchedule:
             pass
-        except Exception as ex:
-            print "VisualSimulator generator", ex.message
+        #except Exception as ex:
+         #   print "VisualSimulator generator", ex.message

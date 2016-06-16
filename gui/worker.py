@@ -29,13 +29,25 @@ class SimWorker(Worker):
     def __init__(self):
         Worker.__init__(self)
         self.callbacks = []
+        self.error_callbacks = []
 
     def add_callback(self, callback):
         self.callbacks.append(callback)
 
+    def add_error_callback(self, callback):
+        self.error_callbacks.append(callback)
+
     def solve_task(self, task):
         task.connect("end_simulation", self._end)
-        task.start()
+        try:
+            task.start()
+        except Exception as ex:
+            self._error(task, ex.message)
+
+    def _error(self, sim, msg):
+        for cb in self.error_callbacks:
+            cb(sim, msg)
+        self.task_complete()
 
     def _end(self, sim):
         for cb in self.callbacks:

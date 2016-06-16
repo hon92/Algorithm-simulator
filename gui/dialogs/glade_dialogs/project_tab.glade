@@ -110,7 +110,6 @@
                         <child>
                           <object class="GtkTreeViewColumn" id="selected_column1">
                             <property name="title" translatable="yes">Selected</property>
-                            <property name="expand">True</property>
                             <property name="clickable">True</property>
                             <property name="alignment">0.5</property>
                             <property name="sort_indicator">True</property>
@@ -145,7 +144,6 @@
                         <child>
                           <object class="GtkTreeViewColumn" id="node_column1">
                             <property name="title" translatable="yes">Nodes</property>
-                            <property name="expand">True</property>
                             <property name="clickable">True</property>
                             <property name="alignment">0.5</property>
                             <property name="sort_indicator">True</property>
@@ -161,7 +159,6 @@
                         <child>
                           <object class="GtkTreeViewColumn" id="edge_column1">
                             <property name="title" translatable="yes">Edges</property>
-                            <property name="expand">True</property>
                             <property name="clickable">True</property>
                             <property name="alignment">0.5</property>
                             <property name="sort_indicator">True</property>

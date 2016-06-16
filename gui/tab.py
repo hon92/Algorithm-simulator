@@ -11,6 +11,7 @@ from sim import simulation
 from collections import deque
 from dialogs import csvdialog as csvd, messagedialog as msgd, xmldialog as xmld
 from gui.exceptions import GraphException, VisibleGraphException
+from sim.processes import process
 
 
 class Tab(gtk.VBox):
@@ -98,7 +99,7 @@ class ProjectTab(Tab):
         self.viz_button.connect("clicked", lambda w: self.run_vizual_simulations())
 
     def load(self):
-        algorithms = ["MyProcess", "SPINProcess"]
+        algorithms = process.get_process_names()
         for alg in algorithms:
             self.combobox.append_text(alg)
         self.combobox.set_active(0)
@@ -141,11 +142,21 @@ class ProjectTab(Tab):
                 self.project.remove_graph_file(row[1])
                 self.liststore.remove(row.iter)
 
-    def run_simulations(self):
-        process_type = self.combobox.get_active_text()
-        process_count = self.process_num_button.get_value_as_int()
-        sim_count = self.sim_num_button.get_value_as_int()
-        files = []
+    def run_simulations(self,
+                        files = None,
+                        sim_count = None,
+                        process_type = None,
+                        process_count = None):
+
+        if not files:
+            files = []
+        if not process_count:
+            process_count = self.process_num_button.get_value_as_int()
+        if not process_type:
+            process_type = self.combobox.get_active_text()
+        if not sim_count:
+            sim_count = self.sim_num_button.get_value_as_int()
+
         try:
             for row in self.liststore:
                 if row[0]:
@@ -263,6 +274,7 @@ class SimulationProgressTab(CloseTab):
         self.worker = worker.SimWorker()
         self.worker.setDaemon(True)
         self.worker.add_callback(lambda s: self.on_sim_complete(s, self.current_iter))
+        self.worker.add_error_callback(self.on_sim_error)
         self.worker.start()
         self.start_next_sim()
 
@@ -400,6 +412,14 @@ class SimulationProgressTab(CloseTab):
             self.liststore[iter][2] = self.CANCELED
             self.liststore[iter][3] = -1
             self.liststore[iter][1] = 0
+        self.start_next_sim()
+
+    def on_sim_error(self, sim, msg):
+        iter = self.current_iter
+        self.liststore[iter][2] = self.CANCELED
+        self.liststore[iter][3] = -1
+        self.liststore[iter][1] = 0
+        self._log_message(self.liststore[iter][0] + ": " + msg, "err")
         self.start_next_sim()
 
     def on_cancel(self):
