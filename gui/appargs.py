@@ -1,6 +1,5 @@
 import argparse
 import sys
-from argparse import ArgumentError
 from sim.processes import process
 
 class AppArgs:
@@ -9,12 +8,12 @@ class AppArgs:
         self.args = args
         self.parser = argparse.ArgumentParser()
         self.parser.add_argument("-project", type = str, help = "Project file location")
-        self.parser.add_argument("-select", type = int, default = 1,
+        self.parser.add_argument("-select", type = int,
                             help = "Graph position in project (starting from 1)")
         self.parser.add_argument("-run", type = str, help = "Algorithm used for simulation")
-        self.parser.add_argument("-processes", type = int, default = 1,
+        self.parser.add_argument("-processes", type = int,
                             help = "Process count used for algorithm")
-        self.parser.add_argument("-count", type = int, default = 1,
+        self.parser.add_argument("-count", type = int,
                             help = "Simulation count")
 
     def solve(self):

@@ -1,3 +1,4 @@
+from misc import utils
 
 class Graph():
     def __init__(self):
@@ -115,7 +116,7 @@ class Edge():
         return self.time
 
     def is_discovered(self):
-        return self.discovered != -1
+        return self.discovered_by != -1
 
     def get_discoverer(self):
         return self.discovered_by
@@ -167,6 +168,7 @@ class VisibleNode(Node):
         self.width = width
         self.height = height
         self.visible = False
+        self.is_selected = False
 
     def is_visible(self):
         return self.visible
@@ -181,7 +183,6 @@ class VisibleNode(Node):
 
     def draw(self, canvas):
         color = self.graph.node_colors[0]
-        name_color = (240, 255, 255)
 
         if self.is_visible():
             if self.discovered_by != -1:
@@ -193,10 +194,19 @@ class VisibleNode(Node):
                               self.width,
                               self.height,
                               True)
+
+        name_color = utils.get_inverted_color(color)
         canvas.set_color(*name_color)
-        canvas.draw_text(self.x + self.width / 6,
+        canvas.draw_centered_text(self.x + self.width / 2,
                          self.y + self.height / 2,
-                         "'{0}'".format(self.name, self.get_size()))
+                         "name:{0}".format(self.name, self.get_size()))
+
+        if self.is_selected:
+            canvas.set_color(*name_color)
+            canvas.draw_rectangle(self.x - 1,
+                                  self.y - 1,
+                                  self.width + 1,
+                                  self.height + 1)
 
         for e in self.get_edges():
             if e.get_destination().is_visible():
@@ -219,25 +229,27 @@ class VisibleEdge(Edge):
     def draw(self, canvas):
         completed_by = self.get_complete()
         discovered_by = self.get_discoverer()
-        text_color = (100, 75, 55)
         arrow_color = (255, 255, 255)
         edge_color = self.destination.graph.node_colors[0]
+        dashed = False
 
         if self.visible:
             edge_color = self.destination.graph.node_colors[self.destination.discovered_by + 1]
-        
+
         if self.discovered_by != -1:
             edge_color = self.destination.graph.node_colors[self.discovered_by + 1]
-            c = 120 # brightness constant
-            edge_color = (int(edge_color[0] + c), int(edge_color[1] + c), int(edge_color[2] + c)) 
+            dashed = True
+
         if self.completed_by != -1:
             edge_color = self.destination.graph.node_colors[self.completed_by + 1]
+            dashed = False
 
         label = "({0})->({1})".format(discovered_by, completed_by)
-        canvas.set_color(*text_color)
+        canvas.set_color(*edge_color)
         canvas.draw_text(self.label_x, self.label_y, label)
         canvas.set_color(*arrow_color)
         canvas.draw_polygon(self.arrow_polygon, True)
         canvas.set_color(*edge_color)
-        canvas.draw_path(self.points)
+        canvas.draw_path(self.points, dashed)
+
 

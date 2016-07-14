@@ -6,14 +6,13 @@ import window
 import tab
 import gobject
 import appargs
-from dialogs import inputdialog
 from dialogs.xmldialog import XMLDialog
 from project import Project
 from gui.exceptions import ProjectException
-from sim.processes import process
+from sim import processfactory as pf 
 
 gobject.threads_init()
-process.load()
+pf.load()
 
 class App():
     def __init__(self, args):

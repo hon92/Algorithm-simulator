@@ -10,7 +10,7 @@ class NodeSelector():
             nw = node.width
             nh = node.height
 
-            if node.visible and x >= nx and x <= nx + nw and y >= ny and y <= ny + nh:
+            if x >= nx and x <= nx + nw and y >= ny and y <= ny + nh:
                 return node
         return None
                 

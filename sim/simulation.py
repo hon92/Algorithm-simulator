@@ -1,17 +1,7 @@
 import simpy
-import monitor
+import processfactory as pf
 from processes import process
 from gui import events
-
-class ProcessFactory():
-    def __init__(self, env):
-        self.env = env
-
-    def create_process(self, process_type):
-        for pr in process._loaded_classes:
-            if pr.__name__ == process_type:
-                return pr(self.env)
-        return None
 
 class AbstractSimulation(events.EventSource):
     def __init__(self):
@@ -45,21 +35,14 @@ class Simulation(AbstractSimulation):
     def __init__(self, graph):
         AbstractSimulation.__init__(self)
         self.env = simpy.Environment()
-        self.process_factory = ProcessFactory(self.env)
-        self.process_id_gen = -1
+        self.process_factory = pf.DefaultProcess(self.env)
         self.graph = graph
         self.processes = []
         self.process_events = []
 
-    def _generate_process_id(self):
-        self.process_id_gen += 1
-        return self.process_id_gen
-
-    def _reset_process_id(self):
-        self.process_id_gen = -1
-
     def register_process(self, process_type):
-        new_process = self.process_factory.create_process(process_type)
+        new_process = self.process_factory.create_process(self.graph,
+                                                          process_type)
         if new_process:
             self.processes.append(new_process)
 
@@ -68,17 +51,15 @@ class Simulation(AbstractSimulation):
             self.register_process(process_type)
 
     def get_available_processor_types(self):
-        return process.get_process_names()
+        return pf.get_process_names()
 
     def prepare_processes(self):
-        self._reset_process_id()
+        self.process_factory.reset_id()
 
         for process in self.processes:
-            process.graph = self.graph
-            process.processes = self.processes
-            process.id = self._generate_process_id()
-            process.monitor = monitor.Monitor()
-            process.on_start()
+            op = [p for p in self.processes if p.get_id() != process.get_id()]
+            process.set_processes(op)
+            process.initialize()
             e = self.env.process(process.run())
             self.process_events.append(e)
 

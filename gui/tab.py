@@ -4,14 +4,14 @@ import ntpath
 import plot
 import exportmodule
 import settings
-from statistics import PlotStatistics
 from misc import timer
 from gui import worker
 from sim import simulation
 from collections import deque
 from dialogs import csvdialog as csvd, messagedialog as msgd, xmldialog as xmld
 from gui.exceptions import GraphException, VisibleGraphException
-from sim.processes import process
+from sim import processfactory as pf
+from gui.statistics import SimulationStatistics
 
 
 class Tab(gtk.VBox):
@@ -99,7 +99,7 @@ class ProjectTab(Tab):
         self.viz_button.connect("clicked", lambda w: self.run_vizual_simulations())
 
     def load(self):
-        algorithms = process.get_process_names()
+        algorithms = pf.get_process_names()
         for alg in algorithms:
             self.combobox.append_text(alg)
         self.combobox.set_active(0)
@@ -197,7 +197,7 @@ class ProjectTab(Tab):
                     self.win.console.writeln(ex.message, "err")
 
 class SimulatorTab(CloseTab):
-    def __init__(self, window, title, simulator):
+    def __init__(self, window, title, filename, simulator):
         CloseTab.__init__(self, window, title)
         self.simulator = simulator
         sw = gtk.ScrolledWindow()
@@ -205,9 +205,7 @@ class SimulatorTab(CloseTab):
         self.notebook = gtk.Notebook()
         self.notebook.set_tab_pos(gtk.POS_LEFT)
         sw.add_with_viewport(self.notebook)
-        self.statistics = self._create_statistics()
-        self.plot_stats = PlotStatistics(self)
-        self.plot_stats.create_properties(self.statistics)
+        self.statistics = self._create_statistics(filename)
         self.pack_start(sw)
         self.plots = []
 
@@ -226,7 +224,7 @@ class SimulatorTab(CloseTab):
 
         for process in self.simulator.processes:
             process_plot = plot.ProcessPlot(process)
-            add_plot_page(process_plot.get_widget(), process_plot.get_title())
+            add_plot_page(process_plot.get_widget_with_navbar(self.win), process_plot.get_title())
 
         self.notebook.connect("switch-page", self.on_page_switch)
         self.show_all()
@@ -238,15 +236,22 @@ class SimulatorTab(CloseTab):
                 selected_plot = tab.plot 
                 selected_plot.draw()
 
-    def _create_statistics(self):
+    def _create_statistics(self, filename):
         vbox = gtk.VBox()
-        hbox = gtk.HBox()
-        hbox.pack_start(gtk.Label("Simulation results"), False, False)
-        vbox.pack_start(hbox, False, False)
+        builder = gtk.Builder()
+        builder.add_from_file(paths.GLADE_DIALOG_DIRECTORY + "tree_statistics.glade")
+        stat_widget = builder.get_object("vbox")
+        info_store = builder.get_object("infostore")
+        sim_stats = SimulationStatistics(info_store)
+        sim_stats.init()
+        sim_stats.update_graph(filename, self.simulator.graph)
+        sim_stats.new_simulation(self.simulator)
+        sim_stats.update_prop("sim_time", self.simulator.env.now)
+        sim_stats.update_processes(self.simulator.processes)
+        vbox.pack_start(stat_widget)
         return vbox
 
     def close(self):
-        del self.plot_stats
         for p in self.plots:
             p.dispose()
         CloseTab.close(self)
@@ -262,8 +267,9 @@ class SimulationProgressTab(CloseTab):
         CloseTab.__init__(self, window, title)
         self.project = project
         self.sim_props = sim_properties
-        self.liststore = gtk.ListStore(str, int, str, float) # process type, progress, status, time
+        self.liststore = gtk.ListStore(str, int, str, float, str) # process type, progress, status, time, filename
         self.sim_q = deque()
+        self.opened_tabs = []
         self.current_iter = -1
         self.sim = None
         self.completed_simulations = {} # key -> index_row, val -> simulation
@@ -283,7 +289,7 @@ class SimulationProgressTab(CloseTab):
         process_count = self.sim_props["process_count"]
         process_type = self.sim_props["process_type"]
         files = self.sim_props["files"]
-        
+
         for filename in files:
             self.used_graphs[filename] = self.project.graph_manager.get_graph(filename)
 
@@ -297,7 +303,7 @@ class SimulationProgressTab(CloseTab):
                 process_info = "{0} - {1}({2})".format(ntpath.basename(filename),
                                                       process_type,
                                                       process_count)
-                self.liststore.append([process_info, 0, self.WAITING, 0.0])
+                self.liststore.append([process_info, 0, self.WAITING, 0.0, filename])
                 self.sim_q.append(simulator)
 
     def _log_message(self, msg, tag):
@@ -393,6 +399,8 @@ class SimulationProgressTab(CloseTab):
     def on_timeout(self):
         if not self.sim:
             return False
+        if self.sim and hasattr(self.sim, "sim_status"):
+            return False
         nodes_count = self.sim.graph.get_nodes_count()
         curr_nodes = self.sim.graph.get_discovered_nodes_count()
         new_val = curr_nodes / float(nodes_count)
@@ -454,8 +462,12 @@ class SimulationProgressTab(CloseTab):
                 if index in self.completed_simulations:
                     sim = self.completed_simulations[index]
                     title = self.liststore[index][0]
-                    simulator_tab = SimulatorTab(self.win, title + "- Detail", sim)
+                    simulator_tab = SimulatorTab(self.win,
+                                                 title + "- Detail",
+                                                 self.liststore[index][4],
+                                                 sim)
                     self.win.create_tab(simulator_tab)
+                    self.opened_tabs.append(simulator_tab)
                     simulator_tab.create_plots()
 
     def get_selected_row_index(self):
@@ -480,6 +492,8 @@ class SimulationProgressTab(CloseTab):
         del self.sim
         self.worker.quit()
         del self.worker
+        for tab in self.opened_tabs:
+            tab.close()
         for f in self.used_graphs:
             self.project.graph_manager.return_graph(f, self.used_graphs[f])
         CloseTab.close(self)

@@ -3,6 +3,8 @@ import cairo
 import math
 
 class Canvas(gtk.DrawingArea):
+    DASH = [10,10,10,10,10]
+
     def __init__(self):
         gtk.DrawingArea.__init__(self)
         self.connect("configure_event", self.on_configure)
@@ -13,6 +15,13 @@ class Canvas(gtk.DrawingArea):
         self.g = 0
         self.b = 0
         self.surface = None
+
+    def _get_context(self):
+        ctx = cairo.Context(self.surface)
+        ctx.set_line_width(self.line_width)
+        ctx.set_source_rgb(self.r, self.g, self.b)
+        ctx.set_antialias(cairo.ANTIALIAS_SUBPIXEL)
+        return ctx
 
     def set_zoom(self, zoom):
         self.zoom = zoom
@@ -35,12 +44,7 @@ class Canvas(gtk.DrawingArea):
         width = w.allocation.width
         height = w.allocation.height
         self.surface = cairo.ImageSurface(cairo.FORMAT_ARGB32, width, height)
-        ctx = cairo.Context(self.surface)
-        ctx.scale(width, height)
-        ctx.set_source_rgb(255, 255, 255)
-        ctx.rectangle(0, 0, 1, 1)
-        ctx.fill()
-        
+
     def on_expose(self, w, e):
         cr = w.window.cairo_create()
         cr.translate(w.allocation.width / 2, w.allocation.height / 2)
@@ -48,47 +52,42 @@ class Canvas(gtk.DrawingArea):
         cr.translate(-w.allocation.width / 2, -w.allocation.height / 2)
         cr.set_source_surface(self.surface, 0, 0)
         cr.paint()
-        
+
     def draw_rectangle(self, x, y, w, h, fill = False):
-        ctx = cairo.Context(self.surface)
-        ctx.set_line_width(self.line_width)
-        ctx.set_source_rgb(self.r, self.g, self.b)
+        ctx = self._get_context()
         ctx.rectangle(x, y, w, h)
         if fill:
             ctx.fill()
         else:
             ctx.stroke()
-    
+
     def draw_text(self, x, y, text):
-        ctx = cairo.Context(self.surface)
-        ctx.set_source_rgb(self.r, self.g, self.b)
+        ctx = self._get_context()
         ctx.move_to(x, y)
         ctx.show_text(text)
         ctx.stroke()
-    
+
+    def draw_centered_text(self, x, y, text):
+        ctx = self._get_context()
+        t = ctx.text_extents(text)
+        self.draw_text(x - t[2] / 2, y + t[3] / 2, text)
+
     def draw_lines(self, points):
-        ctx = cairo.Context(self.surface)
-        ctx.set_line_width(self.line_width)
-        ctx.set_source_rgb(self.r, self.g, self.b)
+        ctx = self._get_context()
         ctx.move_to(points[0], points[1])
         for i in xrange(2, len(points), 2):
             ctx.line_to(points[i], points[i + 1])
         ctx.stroke()
-    
+
     def draw_line(self, x1, y1, x2, y2):
-        ctx = cairo.Context(self.surface)
-        ctx.set_line_width(self.line_width)
-        ctx.set_source_rgb(self.r, self.g, self.b)
+        ctx = self._get_context()
         ctx.move_to(x1, y1)
         ctx.line_to(x2,y2)
         ctx.stroke()
 
     def draw_polygon(self, points, fill = False):
-        ctx = cairo.Context(self.surface)
-        ctx.set_line_width(self.line_width)
-        ctx.set_source_rgb(self.r, self.g, self.b)
+        ctx = self._get_context()
         ctx.move_to(points[0][0], points[0][1])
-
         for i in xrange(1, len(points)):
             ctx.line_to(points[i][0], points[i][1])
         ctx.move_to(points[-1][0], points[-1][1])
@@ -98,25 +97,23 @@ class Canvas(gtk.DrawingArea):
         else:
             ctx.stroke()
 
-    def draw_path(self, path):
-        ctx = cairo.Context(self.surface)
-        ctx.set_line_width(self.line_width)
-        ctx.set_source_rgb(self.r, self.g, self.b)
+    def draw_path(self, path, dashed):
+        ctx = self._get_context()
+        if dashed is True:
+            ctx.set_dash(self.DASH, 0)
         ctx.move_to(path[0][0], path[0][1])
         p = (len(path) - 1) / 3
         i = 1
         for _ in xrange(p):
             ctx.curve_to(path[i][0], path[i][1],
                          path[i + 1][0], path[i + 1][1],
-                         path[i + 2][0], path[i + 2][1],                         
+                         path[i + 2][0], path[i + 2][1],
                          )
             i += 3
         ctx.stroke()
 
     def draw_arrow(self, x1, y1, x2, y2):
-        ctx = cairo.Context(self.surface)
-        ctx.set_line_width(self.line_width)
-        ctx.set_source_rgb(self.r, self.g, self.b)
+        ctx = self._get_context()
         ctx.save()
         ctx.translate(x2, y2)
         ctx.rotate(math.atan2(y2 - y1, x2 - x1))

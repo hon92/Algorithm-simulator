@@ -8,7 +8,7 @@ class ExportDataModule():
 
     def get_data(self):
         yield ""
-            
+
 class CSVExportDataModule(ExportDataModule):
     def __init__(self, simulator):
         ExportDataModule.__init__(self, simulator)
