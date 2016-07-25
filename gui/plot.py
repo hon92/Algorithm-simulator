@@ -124,11 +124,20 @@ class AbstactSimplePlot(AbstractPlot):
         if leg_line in self.lines_map:
             plot_line = self.lines_map[leg_line]
             visible = not plot_line.get_visible()
-            plot_line.set_visible(visible)
-            if visible:
-                leg_line.set_alpha(1.0)
-            else:
-                leg_line.set_alpha(0.2)
+            marker = plot_line.get_marker()
+
+            if e.mouseevent.button == 1:
+                plot_line.set_visible(visible)
+                if visible:
+                    leg_line.set_alpha(1.0)
+                else:
+                    leg_line.set_alpha(0.2)
+            elif e.mouseevent.button == 3:
+                if marker == "o":
+                    plot_line.set_marker("")
+                else:
+                    plot_line.set_marker("o")
+
         self.get_figure().canvas.draw_idle()
 
     def map_leg_lines_to_axis(self, ax):

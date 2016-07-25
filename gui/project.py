@@ -17,16 +17,10 @@ class Project():
     def set_name(self, name):
         self.name = name
 
-    def get_project_name(self):
-        if not self.name:
-            return self.project_file
+    def get_name(self):
         return self.name
 
-    def get_project_name_without_extension(self):
-        full_filename = self.get_project_name()
-        return full_filename.replace(".xml", "")
-
-    def get_project_file(self):
+    def get_file(self):
         return self.project_file
 
     def add_tab(self, tab):
@@ -36,7 +30,7 @@ class Project():
         if tab in self.opened_tabs:
             self.opened_tabs.remove(tab)
 
-    def get_project_tab(self):
+    def get_tab(self):
         if self.is_open():
             return self.opened_tabs[0]
         return None
@@ -53,7 +47,7 @@ class Project():
             if project_name:
                 self.set_name(project_name)
             for filename in files:
-                self.add_graph_file(filename)
+                self.load_graph_file(filename)
 
     def save(self):
         return self.project_loader.save(self.name, self.get_files())
@@ -62,7 +56,7 @@ class Project():
         for t in reversed(self.opened_tabs):
             t.close()
 
-    def add_graph_file(self, filename):
+    def load_graph_file(self, filename):
         return self.graph_manager.register_graph(filename)
 
     def remove_graph_file(self, filename):

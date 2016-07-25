@@ -47,7 +47,7 @@ class AppArgs:
                         self.on_arg_error("Simulation count must be between 1 - 100")
                     sim_count = args.count
 
-                t = self.app.project.get_project_tab()
+                t = self.app.project.get_tab()
                 t.run_simulations(files,
                                   sim_count,
                                   process_type,

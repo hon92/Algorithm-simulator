@@ -11,7 +11,6 @@ class MonitorManager():
 
     def collect(self, monitors_to_collect = None):
         for mon in self.monitors:
-            yield mon.get_name()
             yield mon.collect(monitors_to_collect)
 
     def get_monitor(self, monitor_name):
@@ -20,17 +19,31 @@ class MonitorManager():
                 return m
         return None
 
+
+class Entry():
+    def __init__(self, entry_name, args):
+        self.entry_name = entry_name
+        self.args = args
+
+    def check(self, val):
+        return len(val) == len(self.args)
+
 class Monitor():
     def __init__(self, name):
         self.name = name
         self.data = {}
+        self.entries = {}
 
     def get_name(self):
         return self.name
 
-    def put(self, entry_type, val):
-        if entry_type in self.data:
-            self.data[entry_type].append(val)
+    def put(self, entry_name, val):
+        if entry_name in self.entries:
+            entry = self.entries[entry_name]
+            if entry.check(val):
+                self.data[entry_name].append(val)
+            else:
+                raise Exception("Invalid arguments for entry '" + entry_name + "'")
 
     def collect(self, monitors_to_collect = None):
         if monitors_to_collect:
@@ -41,7 +54,8 @@ class Monitor():
             return data
         return self.data
 
-    def add_entry_type(self, name):
+    def add_entry(self, name, *args):
+        self.entries[name] = Entry(name, args)
         self.data[name] = []
 
     def set_enabled(self, enabled):
@@ -50,10 +64,13 @@ class Monitor():
     def is_enabled(self):
         return self.enabled
 
+    def get_header_data(self):
+        return ";".join(self.data.keys())
+
 class TimeMonitor(Monitor):
     def __init__(self, clock):
         Monitor.__init__(self, "TimeMonitor")
-        self.add_entry_type("wait")
+        self.add_entry("wait", "current_time", "added_time")
         self.clock = clock
         self.clock.connect("wait", self.on_time_added)
 
@@ -63,12 +80,12 @@ class TimeMonitor(Monitor):
 class MemoryMonitor(Monitor):
     def __init__(self, storage, clock):
         Monitor.__init__(self, "MemoryMonitor")
-        self.add_entry_type("push_time")
-        self.add_entry_type("pop_time")
-        self.add_entry_type("push_step")
-        self.add_entry_type("pop_step")
-        self.add_entry_type("memory_usage_time")
-        self.add_entry_type("memory_usage_step")
+        self.add_entry("push_time", "simulation_time", "storage_size")
+        self.add_entry("pop_time", "simulation_time", "storage_size")
+        self.add_entry("push_step", "clock_step", "storage_size")
+        self.add_entry("pop_step", "clock_step", "storage_size")
+        self.add_entry("memory_usage_time", "simulation_time", "storage_size")
+        self.add_entry("memory_usage_step", "clock_step", "storage_size")
         self.storage = storage
         self.clock = clock
         self.storage.connect("push", self.on_push)
@@ -86,9 +103,9 @@ class MemoryMonitor(Monitor):
 class EdgeMonitor(Monitor):
     def __init__(self, graph_process):
         Monitor.__init__(self, "EdgeMonitor")
-        self.add_entry_type("edge_discovered")
-        self.add_entry_type("edge_calculated")
-        self.add_entry_type("edge_completed")
+        self.add_entry("edge_discovered", "simulation_time", "clock_time", "clock_step")
+        self.add_entry("edge_calculated", "simulation_time", "clock_time", "clock_step", "edge_time")
+        self.add_entry("edge_completed", "simulation_time", "clock_time", "clock_step")
         graph_process.connect("edge_discovered", self.on_edge_discovered)
         graph_process.connect("edge_calculated", self.on_edge_calculated)
         graph_process.connect("edge_completed", self.on_edge_completed)
@@ -105,15 +122,15 @@ class EdgeMonitor(Monitor):
 class ProcessMonitor(Monitor):
     def __init__(self, process):
         Monitor.__init__(self, "ProcessMonitor")
-        self.add_entry_type("wait")
-        self.add_entry_type("notify")
+        self.add_entry("wait", "simulation_time")
+        self.add_entry("notify", "simulation_time")
         self.process = process
         self.process.connect("notify", self.on_notify)
         self.process.connect("wait", self.on_wait)
 
     def on_notify(self, time):
-        self.put("notify", time)
+        self.put("notify", (time,))
 
     def on_wait(self, time):
-        self.put("wait", time)
+        self.put("wait", (time,))
 

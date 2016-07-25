@@ -2,7 +2,7 @@ import gtk
 import pango
 import paths
 import settings
-from dialogs import txtdialog
+from gui.dialogs import dialog
 
 
 class Window(gtk.Window):
@@ -45,7 +45,7 @@ class Window(gtk.Window):
             item = gtk.MenuItem(label)
             item.connect("activate", lambda w: callback())
             parent_menu.append(item)
-        
+
         def add_image_menu_item(parent_menu, label, callback, image_name):
             item = gtk.ImageMenuItem(label)
             image = gtk.Image()
@@ -97,7 +97,7 @@ class Window(gtk.Window):
 
     def show(self):
         self.show_all()
-        
+
     def close(self, w):
         self.app.close()
 
@@ -124,7 +124,7 @@ class Console(gtk.HBox):
             button.connect("clicked", lambda w: callback())
             button.show_all()
             return button
-            
+
         clear_button = create_button("Delete-24 (1).png",
                                           "Clear console",
                                           self.clear)
@@ -167,12 +167,12 @@ class Console(gtk.HBox):
     def export(self):
         text = self.get_text()
         if text:
-            filename = txtdialog.TXTDialog.save_as_file()
+            filename = dialog.Dialog.get_factory("txt").save_as("Save to file")
             if filename:
                 with open(filename, "w") as f:
                     f.write(text)
                     f.flush()
-                self.writeln("Console text exported to " + filename)
+                self.writeln("Console text exported to '{0}'".format(filename))
 
     def scroll_to_end(self):
         self.textview.scroll_mark_onscreen(self.buffer.get_insert())

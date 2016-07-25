@@ -6,7 +6,7 @@ import window
 import tab
 import gobject
 import appargs
-from dialogs.xmldialog import XMLDialog
+from gui.dialogs import dialog
 from project import Project
 from gui.exceptions import ProjectException
 from sim import processfactory as pf 
@@ -41,22 +41,25 @@ class App():
         project_tab.load()
 
     def create_project(self):
-        project_name = XMLDialog.save_as_file()
-        if project_name and project_name.endswith(".xml"):
-            if self.project:
-                self.project.close()
-
-            project = Project.create_empty_project(project_name)
-            project.set_name(project_name)
-            project.save()
-            self._open_project(project)
-            self.window.console.writeln("Project was created in " + project_name)
-        else:
-            self.window.console.writeln("Project invalid name")
+        input_dialog = dialog.InputDialog("Insert project name", self.window)
+        project_name = input_dialog.run()
+        if project_name:
+            project_file = dialog.Dialog.get_factory("xml").save_as("Save project file",
+                                                                    text = project_name + ".xml")
+            if project_file:
+                if self.project:
+                    self.project.close()
+                project = Project.create_empty_project(project_file)
+                project.set_name(project_name)
+                project.save()
+                self._open_project(project)
+                msg = "Project '{0}' was created at location '{1}'"
+                self.window.console.writeln(msg.format(project.get_name(),
+                                                           project.get_file()))
 
     def open_project(self, project_file = None):
         if not project_file:
-            project_file = XMLDialog.open_file()
+            project_file = dialog.Dialog.get_factory("xml").open("Open project")
 
         if project_file:
             if self.project:
@@ -64,30 +67,33 @@ class App():
 
             try:
                 project = Project(project_file)
+                msg = "Opening project at location '{0}'".format(project_file)
+                self.window.console.writeln(msg)
                 self._open_project(project)
-                self.window.console.writeln("Project " + project.get_project_name_without_extension()
-                                                 + " was successfully opened")
+                msg = "Project '{0}' was opened".format(project.get_name())
+                self.window.console.writeln(msg)
             except ProjectException:
-                self.window.console.writeln("Project is corrupted", "err")
+                msg = "Project '{0}' is corrupted".format(project.get_name())
+                self.window.console.writeln(msg, "err")
 
     def close_project(self):
         if self.project:
+            name = self.project.get_name()
             self.project.close()
             self.window.set_title("")
             self.project = None
-            self.window.console.writeln("Project was closed")
+            msg = "Project '{0}' was closed".format(name)
+            self.window.console.writeln(msg)
 
     def save_project(self):
         if self.project:
             saved = self.project.save()
             if saved:
-                self.window.console.writeln("Project "
-                                            + self.project.get_project_name_without_extension()
-                                            + " was saved")
+                msg = "Project '{0}' was saved".format(self.project.get_name())
+                self.window.console.writeln(msg)
             else:
-                self.window.console.writeln("Project "
-                                            + self.project.get_project_name_without_extension()
-                                            + " was not saved due to error", "err")
+                msg = "Project '{0}' was not saved due to error"
+                self.window.console.writeln(msg.format(self.project.get_name()), "err")
 
     def open_settings(self):
         if self.project:
@@ -95,8 +101,8 @@ class App():
 
     def start_simulation(self):
         if self.project:
-            self.project.get_project_tab().run_simulations()
+            self.project.get_tab().run_simulations()
 
     def start_graphics_simulation(self):
         if self.project:
-            self.project.get_project_tab().run_vizual_simulations()
+            self.project.get_tab().run_vizual_simulations()

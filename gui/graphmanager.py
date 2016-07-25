@@ -16,17 +16,16 @@ class GraphManager():
 
     def register_graph(self, filename):
         if not filename.endswith(".xml") or not os.path.exists(filename):
-            return False
+            raise Exception("'{0}' is invalid graph filename".format(filename))
         try:
             if filename in self.graphs:
-                return False
+                raise Exception("'{0}' is already in project".format(filename))
 
             graph = self.get_graph_now(filename)
             self.graphs[filename] = [graph]
             self.visible_graphs[filename] = []
-            return True
         except GraphException:
-            return False
+            raise Exception("Graph in '{0}' is corrupted".format(filename))
 
     def unregister_graph(self, filename):
         if filename in self.graphs:

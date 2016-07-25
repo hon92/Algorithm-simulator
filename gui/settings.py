@@ -1,7 +1,7 @@
 #app settings
 
-WINDOW_WIDTH = 640
-WINDOW_HEIGHT = 480
+WINDOW_WIDTH = 1280
+WINDOW_HEIGHT = 720
 WINDOW_TITLE = "Process checker"
 VERSION = "1.0"
 
