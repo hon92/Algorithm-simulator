@@ -47,9 +47,7 @@ class Canvas(gtk.DrawingArea):
 
     def on_expose(self, w, e):
         cr = w.window.cairo_create()
-        cr.translate(w.allocation.width / 2, w.allocation.height / 2)
         cr.scale(self.zoom, self.zoom)
-        cr.translate(-w.allocation.width / 2, -w.allocation.height / 2)
         cr.set_source_surface(self.surface, 0, 0)
         cr.paint()
 

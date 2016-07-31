@@ -3,7 +3,10 @@ class NodeSelector():
     def __init__(self, visible_graph):
         self.graph = visible_graph
 
-    def get_node_at(self, x, y):
+    def get_node_at(self, x, y, zoom = 1.0):
+        x /= zoom
+        y /= zoom
+
         for node in self.graph.nodes.values():
             nx = node.x
             ny = node.y

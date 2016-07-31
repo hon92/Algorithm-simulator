@@ -627,7 +627,9 @@ class VizualSimulationTab(CloseTab):
     def on_mouse_click(self, e):
         if e.button != 1:
             return
-        selected_node = self.node_selector.get_node_at(int(e.x), int(e.y))
+
+        zoom = self.canvas.get_zoom()
+        selected_node = self.node_selector.get_node_at(int(e.x), int(e.y), zoom)
         self.switch_selected_node(selected_node)
 
     def update_node_info(self, node):
