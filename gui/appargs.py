@@ -29,11 +29,11 @@ class AppArgs:
 
                 files = [project_files[args.select]]
                 sim_count = 1
-                process_type = process.get_process_names()[0]
+                process_type = process.get_processes_names()[0]
                 process_count = 1
 
                 if args.run:
-                    if args.run not in process.get_process_names():
+                    if args.run not in process.get_processes_names():
                         self.on_arg_error("Process type not valid")
                     process_type = args.run
 

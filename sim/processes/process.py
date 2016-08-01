@@ -65,6 +65,7 @@ class Process(EventSource):
         self.register_event("wait")
         self.register_event("notify")
         self.register_event("sleep")
+        self.register_event("log")
         self._sleep = False
         self.id = id
         self.name = name
@@ -110,7 +111,13 @@ class Process(EventSource):
             self._sleep = False
             self.fire("notify", self.env.now)
 
+    def log(self, message, msg_tag = "out"):
+        self.fire("log", message, msg_tag)
+
 class GraphProcess(Process):
+    NAME = "Unknow"
+    DESCRIPTION = "No description"
+
     def __init__(self, id, name, env, graph):
         Process.__init__(self, id, name, env)
         self.register_event("edge_discovered")

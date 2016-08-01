@@ -142,7 +142,7 @@ class AbstactSimplePlot(AbstractPlot):
 
     def map_leg_lines_to_axis(self, ax):
         leg = ax.get_legend()
-        if not leg:
+        if not leg and len(ax.get_lines()):
             leg = ax.legend()
 
         if not leg:
@@ -351,10 +351,6 @@ class ProcessPlot(AbstractMultiPlot):
         self.get_axis(3).plot(xdata, ydata, marker = "o", label = "Completed nodes")
         AbstractMultiPlot.draw_plot(self)
 
-    #def post_process(self):
-        #self.figure.tight_layout(h_pad = -1.5, w_pad = 0.5)
-     #   AbstractMultiPlot.post_process(self)
-
     def get_title(self):
         return "Process id - {0}".format(self.process.id)
 
@@ -367,35 +363,10 @@ class VizualSimPlot(AbstractMultiPlot):
         self.add_subplot(2, 1, 4, "time", "count", "Calculated")
         self.add_subplot(3, 1, 4, "time", "count", "Edges discovered")
         self.add_subplot(4, 1, 4, "time", "count", "Edges completed")
-        
-        """
-        font = {"fontsize":10}
-        self.axis1 = self.add_subplot(1, 1, 4)
-        self.axis1.set_title("Memory uses", fontdict = font)
-        self.axis1.set_ylabel("size", fontdict = font)
-        self.axis1.set_xlabel("time", fontdict = font)
 
-        self.axis2 = self.add_subplot(2, 1, 4)
-        self.axis2.set_title("Calculated", fontdict = font)
-        self.axis2.set_xlabel("time", fontdict = font)
-        self.axis2.set_ylabel("count", fontdict = font)
-
-        self.axis3 = self.add_subplot(3, 1, 4)
-        self.axis3.set_title("Edges discovered", fontdict = font)
-        self.axis3.set_xlabel("time", fontdict = font)
-        self.axis3.set_ylabel("count", fontdict = font)
-
-        self.axis4 = self.add_subplot(4, 1, 4)
-        self.axis4.set_title("Edges completed", fontdict = font)
-        self.axis4.set_xlabel("time", fontdict = font)
-        self.axis4.set_ylabel("count", fontdict = font)
-        """
         AbstractMultiPlot.pre_process(self)
         for ax in self.figure.axes:
             ax.tick_params(labelsize=8)
-
-    #def post_process(self):
-        #pass#self.figure.tight_layout(w_pad = -2.3)
 
 class AnimPlot():
     def __init__(self, plot):

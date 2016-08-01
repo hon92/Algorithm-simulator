@@ -1,25 +1,33 @@
+import importlib
 from processes import monitor
 
 _pre_process_path = "sim.processes."
 # tuple (class_name, file), file must be inside processes package
-available_processes = [("Alg2", "alg")]
-
-_loaded_classes = None
+available_processes = [("Algorithm1", "algorithms"),
+                       ("Algorithm2", "algorithms"),
+                       ("Algorithm3", "algorithms")]
+loaded = False
+_loaded_classes = []
+algs = {}
 
 def load():
-    global _loaded_classes
-    if not _loaded_classes:
-        _loaded_classes = []
-        import importlib
-        for cl, f in available_processes:
-            module = importlib.import_module(_pre_process_path + f)
-            _loaded_classes.append(getattr(module, cl))
+    global loaded
 
-def get_process_names():
-    global _loaded_classes
-    if not _loaded_classes:
-        load()
-    return [cl.__name__ for cl in _loaded_classes]
+    if not loaded:
+        for class_name, filename in available_processes:
+            module = importlib.import_module(_pre_process_path + filename)
+            loaded_class = getattr(module, class_name)
+            algs[loaded_class.NAME] = loaded_class.DESCRIPTION
+            _loaded_classes.append(loaded_class)
+        loaded = True
+
+def get_processes_names():
+    return algs.keys()
+
+def get_alg_description(algorithm_name):
+    if algorithm_name in algs:
+        return algs[algorithm_name]
+    return ""
 
 class ProcessFactory():
     def __init__(self, env):
@@ -35,7 +43,7 @@ class ProcessFactory():
 
     def create_process(self, graph, process_type):
         for pr in _loaded_classes:
-            if pr.__name__ == process_type:
+            if pr.NAME == process_type:
                 return pr(self.next_id(),
                           self.env,
                           graph)

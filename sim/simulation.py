@@ -51,7 +51,7 @@ class Simulation(AbstractSimulation):
             self.register_process(process_type)
 
     def get_available_processor_types(self):
-        return pf.get_process_names()
+        return pf.get_processes_names()
 
     def prepare_processes(self):
         self.process_factory.reset_id()

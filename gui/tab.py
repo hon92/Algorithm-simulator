@@ -8,14 +8,12 @@ import simulationcontroller as sc
 from misc import timer
 from gui import worker
 from sim import simulation
-from collections import deque
 from gui.dialogs import dialog
 from gui.exceptions import GraphException, VisibleGraphException
 from sim import processfactory as pf
 from canvas import Canvas
 from nodeselector import NodeSelector
 from gui import statistics
-
 
 
 class Tab(gtk.VBox):
@@ -92,6 +90,7 @@ class ProjectTab(Tab):
         self.combobox = builder.get_object("combobox")
         self.process_num_button = builder.get_object("process_num_button")
         self.sim_num_button = builder.get_object("sim_num_button")
+        self.alg_description = builder.get_object("alg_description")
         self.pack_start(self.box)
         self._connect_signals()
 
@@ -101,11 +100,16 @@ class ProjectTab(Tab):
         self.remove_button.connect("clicked", lambda w: self.remove_graph_file())
         self.sim_button.connect("clicked", lambda w: self.run_simulations())
         self.viz_button.connect("clicked", lambda w: self.run_vizual_simulations())
+        self.combobox.connect("changed", self.on_alg_change)
+
+    def on_alg_change(self, w):
+        desc = pf.get_alg_description(w.get_active_text())
+        self.alg_description.set_text(desc)
 
     def load(self):
-        algorithms = pf.get_process_names()
-        for alg in algorithms:
-            self.combobox.append_text(alg)
+        algorithms = pf.get_processes_names()
+        for alg_name in algorithms:
+            self.combobox.append_text(alg_name)
         self.combobox.set_active(0)
 
         for filename in self.project.get_files():
@@ -260,24 +264,33 @@ class SimulationProgressTab(CloseTab):
     WAITING = "Pending"
     COMPLETED = "Completed"
 
+    NAME_COL = 0
+    PROGRESS_COL = 1
+    STATUS_COL = 2
+    TIME_COL = 3
+    FILENAME_COL = 4
+    ORDER_COL = 5
+
     def __init__(self, window, title, project, sim_properties):
         CloseTab.__init__(self, window, title)
         self.project = project
         self.sim_props = sim_properties
-        self.liststore = gtk.ListStore(str, int, str, float, str) # process type, progress, status, time, filename
-        self.sim_q = deque()
         self.opened_tabs = []
-        self.current_iter = -1
-        self.sim = None
-        self.completed_simulations = {} # key -> index_row, val -> simulation
+        self.current_iter = None
+        self.current_order = 0
+        self.completed_simulations = {}
         self.used_graphs = {}
+        self.closed = False
+        self.finished = False
+
         self.timer = timer.Timer(self.PROGRESS_BAR_REFRESH_TIME, self.on_timeout)
-        self._create_content()
-        self._prepare_data()
         self.worker = worker.SimWorker()
         self.worker.setDaemon(True)
-        self.worker.add_callback(lambda s: self.on_sim_complete(s, self.current_iter))
-        self.worker.add_error_callback(self.on_sim_error)
+        self.worker.add_callback(lambda s: gtk.idle_add(self.on_sim_complete, s))
+        self.worker.add_error_callback(lambda s, msg: gtk.idle_add(self.on_sim_error, s, msg))
+
+        self._create_content()
+        self._prepare_data()
         self.worker.start()
         self.start_next_sim()
 
@@ -290,25 +303,59 @@ class SimulationProgressTab(CloseTab):
         for filename in files:
             self.used_graphs[filename] = self.project.graph_manager.get_graph(filename)
 
+        order = 0
         for _ in xrange(sim_count):
             for filename in files:
                 graph = self.used_graphs[filename]
                 simulator = simulation.Simulation(graph)
                 simulator.register_n_processes(process_type, process_count)
                 for process in simulator.processes:
-                    process.connect("log", self._log_message)
+                    process.connect("log", self.log_message)
                 process_info = "{0} - {1}({2})".format(ntpath.basename(filename),
                                                       process_type,
                                                       process_count)
-                self.liststore.append([process_info, 0, self.WAITING, 0.0, filename])
-                self.sim_q.append(simulator)
+                order += 1
+                self.liststore.append([process_info, 0, self.WAITING, 0.0, filename, order])
+                self.worker.put(simulator)
 
-    def _log_message(self, msg, tag):
+    def log_message(self, msg, tag):
         self.win.console.writeln(msg, tag)
 
     def _create_content(self):
-        def create_button(icon, tooltip, callback):
-            button = gtk.Button()
+        builder = gtk.Builder()
+        builder.add_from_file(paths.GLADE_DIALOG_DIRECTORY + "simulation_progress_view.glade")
+        vbox = builder.get_object("vbox")
+        self.treeview = builder.get_object("treeview")
+        # model structure -> process type, progress, status, time, filename, order
+        self.liststore = builder.get_object("liststore")
+
+        self.name_col = builder.get_object("name_column")
+        self.progress_col = builder.get_object("progress_column")
+        self.status_col = builder.get_object("status_column")
+        self.time_col = builder.get_object("time_column")
+
+        self.name_col.set_sort_column_id(-1)
+        self.progress_col.set_sort_column_id(-1)
+        self.status_col.set_sort_column_id(-1)
+        self.time_col.set_sort_column_id(-1)
+
+        def col_clicked(treeview_column):
+            if self.finished:
+                self.name_col.set_sort_column_id(self.NAME_COL)
+                self.progress_col.set_sort_column_id(self.PROGRESS_COL)
+                self.status_col.set_sort_column_id(self.STATUS_COL)
+                self.time_col.set_sort_column_id(self.TIME_COL)
+
+        self.name_col.connect("clicked", col_clicked)
+        self.progress_col.connect("clicked", col_clicked)
+        self.status_col.connect("clicked", col_clicked)
+        self.time_col.connect("clicked", col_clicked)
+
+        show_button = builder.get_object("show_button")
+        export_button = builder.get_object("export_button")
+        cancel_button = builder.get_object("cancel_button")
+
+        def create_button(button, icon, tooltip, callback):
             image = gtk.Image()
             image.set_from_file(paths.ICONS_PATH + icon)
             button.add(image)
@@ -317,130 +364,104 @@ class SimulationProgressTab(CloseTab):
             button.show_all()
             return button
 
-        export_button = create_button("CSV-24.png",
+        show_button = create_button(show_button,
+                                    "Show Property-24.png",
+                                    "Show results",
+                                    self.on_show_results)
+
+        export_button = create_button(export_button,
+                                      "CSV-24.png",
                                       "Export data to CSV",
                                       self.on_export)
 
-        cancel_button = create_button("Close Window-24.png",
+        cancel_button = create_button(cancel_button,
+                                      "Close Window-24.png",
                                       "Cancel simulation",
                                       self.on_cancel)
 
-        show_button = create_button("Show Property-24.png",
-                                      "Show results",
-                                      self.on_show_results)
-
-        self.treeview = self._create_tree_view()
-        sw = gtk.ScrolledWindow()
-        sw.set_policy(gtk.POLICY_AUTOMATIC, gtk.POLICY_AUTOMATIC)
-        sw.add_with_viewport(self.treeview)
-        self.pack_start(sw)
-        hbox = gtk.HBox()
-        hbox.pack_start(show_button)
-        hbox.pack_start(export_button)
-        hbox.pack_start(cancel_button)
-        self.pack_start(hbox, False)
+        self.pack_start(vbox)
         self.show_all()
 
-    def _create_tree_view(self):
-        treeview = gtk.TreeView(model = self.liststore)
-
-        renderer_text = gtk.CellRendererText()
-        renderer_text.set_property("xalign", 0.5)
-        col1 = gtk.TreeViewColumn("Test info")
-        col1.set_property("alignment", 0.5)
-        col1.set_min_width(150)
-        col1.pack_start(renderer_text)
-        col1.add_attribute(renderer_text, "text", 0)
-
-        renderer_progress = gtk.CellRendererProgress()
-        renderer_progress.set_property("xalign", 0.5)
-        col2 = gtk.TreeViewColumn("Simulation progress")
-        col2.set_property("alignment", 0.5)
-        col2.set_min_width(200)
-        col2.pack_start(renderer_progress)
-        col2.add_attribute(renderer_progress, "value", 1)
-
-        renderer_text = gtk.CellRendererText()
-        renderer_text.set_property("xalign", 0.5)
-        col3 = gtk.TreeViewColumn("Status")
-        col3.set_property("alignment", 0.5)
-        col3.set_min_width(50)
-        col3.pack_start(renderer_text)
-        col3.add_attribute(renderer_text, "text", 2)
-
-        renderer_text = gtk.CellRendererText()
-        renderer_text.set_property("xalign", 0.5)
-        col4 = gtk.TreeViewColumn("Test info")
-        col4.set_property("alignment", 0.5)
-        col4.set_min_width(50)
-        col4.pack_start(renderer_text)
-        col4.add_attribute(renderer_text, "text", 3)
-
-        treeview.append_column(col1)
-        treeview.append_column(col2)
-        treeview.append_column(col3)
-        treeview.append_column(col4)
-        return treeview
+    def get_next_row(self):
+        for row in self.liststore:
+            order = row.model.get_value(row.iter, self.ORDER_COL)
+            if order > self.current_order:
+                self.current_order = order
+                return row.iter
+        self.finished = True
+        return None
 
     def start_next_sim(self):
-        self.set_title("Simulation ({0}/{1})".format(self.current_iter + 1,
+        if self.closed:
+            return
+
+        self.set_title("Simulation ({0}/{1})".format(self.current_order,
                                                      self.sim_props["sim_count"] * 
                                                      len(self.sim_props["files"])))
-        if len(self.sim_q):
-            self.sim = self.sim_q.pop()
-            self.current_iter += 1
-            self.liststore[self.current_iter][2] = self.RUNNING
-            self.timer.restart()
-            self.worker.put(self.sim)
+
+        self.timer.stop()
+        self.current_iter = self.get_next_row()
+        if not self.current_iter:
+            return
+
+        self.liststore.set(self.current_iter, self.STATUS_COL, self.RUNNING)
+        self.timer.start()
 
     def on_timeout(self):
-        if not self.sim:
+        sim = self.worker.task_in_progress
+        if not sim:
             return False
-        if self.sim and hasattr(self.sim, "sim_status"):
-            return False
-        nodes_count = self.sim.graph.get_nodes_count()
-        curr_nodes = self.sim.graph.get_discovered_nodes_count()
+        nodes_count = sim.graph.get_nodes_count()
+        curr_nodes = sim.graph.get_discovered_nodes_count()
         new_val = curr_nodes / float(nodes_count)
-        self.liststore[self.current_iter][1] = int(new_val * 100)
+        if new_val > 1.0:
+            self.log_message("Progress value is bigger then 1.0", "warn")
+        self.liststore.set(self.current_iter, self.PROGRESS_COL, int(new_val * 100))
         if new_val >= 1.0:
             return False
         return True
 
-    def on_sim_complete(self, sim, iter):
+    def on_sim_complete(self, sim):
         status = sim.sim_status
         if not status:
-            self.liststore[iter][2] = self.COMPLETED
-            self.liststore[iter][3] = sim.env.now
-            self.liststore[iter][1] = 100
-            self.completed_simulations[iter] = sim
+            self.liststore.set(self.current_iter,
+                               self.PROGRESS_COL, 100,
+                               self.STATUS_COL, self.COMPLETED,
+                               self.TIME_COL, sim.env.now)
+            self.completed_simulations[self.current_order] = sim
         else:
-            self.liststore[iter][2] = self.CANCELED
-            self.liststore[iter][3] = -1
-            self.liststore[iter][1] = 0
+            self.liststore.set(self.current_iter,
+                               self.PROGRESS_COL, 0,
+                               self.STATUS_COL, self.CANCELED,
+                               self.TIME_COL, 0)
         self.start_next_sim()
 
     def on_sim_error(self, sim, msg):
-        iter = self.current_iter
-        self.liststore[iter][2] = self.CANCELED
-        self.liststore[iter][3] = -1
-        self.liststore[iter][1] = 0
-        self._log_message(self.liststore[iter][0] + ": " + msg, "err")
+        self.liststore.set(self.current_iter,
+                               self.PROGRESS_COL, 0,
+                               self.STATUS_COL, self.CANCELED,
+                               self.TIME_COL, 0)
+        error_msg = "{0}: {1}".format(self.liststore.get_value(self.current_iter, self.NAME_COL), msg)
+        self.log_message(error_msg, "err")
         self.start_next_sim()
 
     def on_cancel(self):
-        index = self.get_selected_row_index()
-        if index > -1:
-            if self.liststore[index][2] == self.RUNNING:
-                if self.sim:
-                    self.sim.stop()
+        iter = self.get_selected_row_iter()
+        if iter:
+            if self.liststore.get_value(iter, self.STATUS_COL) == self.RUNNING:
+                sim = self.worker.task_in_progress
+                if sim:
+                    sim.stop()
 
     def on_export(self):
-        index = self.get_selected_row_index()
-        if index > -1:
-            if self.liststore[index][2] == self.COMPLETED:
-                if index not in self.completed_simulations:
+        iter = self.get_selected_row_iter()
+        if iter:
+            if self.liststore.get_value(iter, self.STATUS_COL) == self.COMPLETED:
+                order = self.liststore.get_value(iter, self.ORDER_COL)
+                if order not in self.completed_simulations:
                     return
-                sim = self.completed_simulations[index]
+
+                sim = self.completed_simulations[order]
                 new_file = dialog.Dialog.get_factory("csv").save_as("Save simulation detail as")
                 if new_file:
                     ex = exportmodule.CSVExportDataModule(sim)
@@ -453,42 +474,36 @@ class SimulationProgressTab(CloseTab):
                         self.win.console.writeln(msg.format(new_file), "err")
 
     def on_show_results(self):
-        index = self.get_selected_row_index()
-        if index > -1:
-            if self.liststore[index][2] == self.COMPLETED:
-                if index in self.completed_simulations:
-                    sim = self.completed_simulations[index]
-                    title = self.liststore[index][0]
+        iter = self.get_selected_row_iter()
+        if iter:
+            if self.liststore.get_value(iter, self.STATUS_COL) == self.COMPLETED:
+                order = self.liststore.get_value(iter, self.ORDER_COL)
+                if order in self.completed_simulations:
+                    sim = self.completed_simulations[order]
+                    title = self.liststore.get_value(iter, self.NAME_COL)
+                    filename = self.liststore.get_value(iter, self.FILENAME_COL)
                     simulator_tab = SimulatorTab(self.win,
                                                  title + "- Detail",
-                                                 self.liststore[index][4],
+                                                 filename,
                                                  sim)
                     self.win.create_tab(simulator_tab)
                     self.opened_tabs.append(simulator_tab)
                     simulator_tab.create_plots()
 
-    def get_selected_row_index(self):
+    def get_selected_row_iter(self):
         tree_selection = self.treeview.get_selection()
         if tree_selection:
             model, rows = tree_selection.get_selected_rows()
-            if rows:
-                return rows[0][0]
-        return -1
-
-    def get_selected_row(self):
-        index = self.get_selected_row_index()
-        if index == -1:
-            return None
-        return self.liststore[index]
+            if model and rows:
+                if len(rows):
+                    return model.get_iter(rows[0][0])
+        return None
 
     def close(self):
+        self.closed = True
         self.timer.stop()
-        self.sim_q.clear()
-        if self.sim:
-            self.sim.stop()
-        del self.sim
+        self.worker.interrupt_current_task()
         self.worker.quit()
-        del self.worker
         for tab in self.opened_tabs:
             tab.close()
         for f in self.used_graphs:
@@ -555,29 +570,6 @@ class VizualSimulationTab(CloseTab):
         self.sim_stats.init()
         self.sim_stats.update_graph(self.filename, self.graph)
         self.show_all()
-
-
-#     def _create_right_panel(self):
-#         self.anim_plot = VizualSimPlotAnim(self.init_plots,
-#                                            self.animate,
-#                                            self.frames_gen)
-#         sw = gtk.ScrolledWindow()
-#         sw.set_policy(gtk.POLICY_AUTOMATIC, gtk.POLICY_AUTOMATIC)
-#         sw.add_with_viewport(self.anim_plot.get_widget())
-# 
-#         def on_configure(w,e):
-#             width = w.allocation.width
-#             height = w.allocation.height
-#             if width == e.width and height == e.height:
-#                 return
-#             sw.set_size_request(int(e.width * 0.3), int(e.height * 0.3))
-#             self.hpaned.set_position(e.width - sw.allocation.width)
-# 
-#         self.win.connect("configure_event", on_configure)
-#         sw.set_size_request(int(self.win.allocation.width * 0.3),
-#                             int(self.win.allocation.height * 0.3))
-#         self.hpaned.set_position(self.win.allocation.width - sw.allocation.width)
-#         return sw
 
     def on_marker_button_toggle(self, button):
         marker = ""
