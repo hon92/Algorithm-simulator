@@ -159,15 +159,11 @@ class SimulationController():
         result = sim_dialog.run()
         if result != gtk.RESPONSE_OK:
             sim_dialog.destroy()
-            return False
+            return None
         process_count = sim_dialog.get_process_count()
         process_type = sim_dialog.get_process_type()
         sim_dialog.destroy()
-        self.simulator.stop()
-        self.simulator.register_n_processes(process_type, process_count)
-        for process in self.simulator.processes:
-            process.connect("log", self._log_message)
-        return True
+        return process_count, process_type
 
     def set_graph_colors(self):
         cc = color_palette.new_color_cycler()
@@ -179,10 +175,23 @@ class SimulationController():
     def _log_message(self, msg, tag):
         self.sim_tab.win.console.writeln(msg, tag)
 
-    def run(self):
+    def prepare_new_run(self, process_count, process_type):
+        self.simulator.stop()
+        self.simulator.register_n_processes(process_type, process_count)
+        for process in self.simulator.processes:
+            process.connect("log", self._log_message)
+
+    def run(self, sim_properties = None):
         if not self.simulator.is_running():
-            if not self.request_sim_dialog():
-                return False
+            if not sim_properties:
+                result = self.request_sim_dialog()
+                if result:
+                    self.prepare_new_run(result[0], result[1])
+                else:
+                    return False
+            else:
+                self.prepare_new_run(sim_properties["process_count"],
+                                     sim_properties["process_type"])
             self.step_count = 0
             self.set_graph_colors()
             self.simulator.start()
@@ -192,6 +201,7 @@ class SimulationController():
             self.sim_tab.anim_plot.start()
             self.update_timers()
             self.timer.start()
+            self.set_state(RunningState(self))
             return True
         return False
 

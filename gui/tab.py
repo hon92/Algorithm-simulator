@@ -189,11 +189,18 @@ class ProjectTab(Tab):
                     self.win.console.writeln(err_text, "err")
                     continue
                 try:
+                    process_count = self.process_num_button.get_value_as_int()
+                    process_type = self.combobox.get_active_text()
+                    sim_properties = {
+                                      "filename": row[1],
+                                      "process_type": process_type,
+                                      "process_count": process_count
+                                     }
                     title = "Viz. sim - " + ntpath.basename(row[1])
                     self.win.create_tab(VizualSimulationTab(self.win,
                                                             title,
                                                             self.project,
-                                                            row[1]))
+                                                            sim_properties))
                 except VisibleGraphException as ex:
                     self.win.console.writeln(ex.message, "err")
 
@@ -511,65 +518,70 @@ class SimulationProgressTab(CloseTab):
         CloseTab.close(self)
 
 class VizualSimulationTab(CloseTab):
-    def __init__(self, window, title, project, filename):
+    def __init__(self, window, title, project, sim_properties):
         CloseTab.__init__(self, window, title)
         self.project = project
-        self.filename = filename
+        self.filename = sim_properties["filename"]
         self.selected_node = None
-        self.graph = self.project.graph_manager.get_visible_graph(filename)
+        self.graph = self.project.graph_manager.get_visible_graph(self.filename)
         self.graph.reset()
+        self.anim_plot = plot.VizualSimPlotAnim()
+        self.create_content()
 
+        self.simulator = simulation.VisualSimulation(self.graph)
+        self.node_selector = NodeSelector(self.graph)
+        self.controller = sc.SimulationController(self, self.toolbar)
+        self.state_stats = statistics.StateStatistics(self.properties_store)
+        self.state_stats.init()
+
+        self.sim_stats = statistics.SimulationStatistics(self.info_store)
+        self.sim_stats.init()
+        self.sim_stats.update_graph(self.filename, self.graph)
+        self.show_all()
+        self.controller.run(sim_properties)
+
+    def create_content(self):
         builder = gtk.Builder()
         builder.add_from_file(paths.GLADE_DIALOG_DIRECTORY + "visual_sim_tab.glade")
         vbox = builder.get_object("vbox")
-        toolbar = builder.get_object("toolbar")
+        self.toolbar = builder.get_object("toolbar")
         self.statusbar = builder.get_object("statusbar")
         self.status_ctx = self.statusbar.get_context_id("Simulation state")
 
+        canvas_container = builder.get_object("canvascontainer")
+        canvas_container.pack_start(self.init_canvas())
+
+        self.marker_button = builder.get_object("markerbutton")
+        self.navbar_button = builder.get_object("navbarbutton")
+        self.time_button = builder.get_object("timebutton")
+        self.step_button = builder.get_object("stepbutton")
+        self.marker_button.set_active(self.anim_plot.has_marker())
+        self.navbar_button.set_active(self.anim_plot.has_navbar())
+        if self.anim_plot.get_unit() == "time":
+            self.time_button.set_active(True)
+        else:
+            self.step_button.set_active(True)
+
+        self.marker_button.connect("toggled", self.on_marker_button_toggle)
+        self.navbar_button.connect("toggled", self.on_navbar_button_toggle)
+        self.time_button.connect("toggled", self.on_unit_change, "time")
+        self.step_button.connect("toggled", self.on_unit_change, "step")
+
+        plotvbox = builder.get_object("plotvbox")
+        plotvbox.pack_start(self.anim_plot.create_widget(self.win))
+        self.pack_start(vbox)
+
+        self.properties_store = builder.get_object("propertystore")
+        self.info_store = builder.get_object("infostore")
+
+    def init_canvas(self):
         canvas = Canvas()
         canvas.set_events(gtk.gdk.BUTTON_PRESS_MASK)
         canvas.connect("configure_event", lambda w, e: self.redraw())
         canvas.connect("button_press_event", lambda w, e: self.on_mouse_click(e))
         canvas.set_size_request(self.graph.width, self.graph.height)
-        canvas_container = builder.get_object("canvascontainer")
-        canvas_container.pack_start(canvas)
         self.canvas = canvas
-
-        self.anim_plot = plot.VizualSimPlotAnim()
-
-        marker_button = builder.get_object("markerbutton")
-        navbar_button = builder.get_object("navbarbutton")
-        time_button = builder.get_object("timebutton")
-        step_button = builder.get_object("stepbutton")
-
-        marker_button.set_active(self.anim_plot.has_marker())
-        navbar_button.set_active(self.anim_plot.has_navbar())
-        if self.anim_plot.get_unit() == "time":
-            time_button.set_active(True)
-        else:
-            step_button.set_active(True)
-
-        marker_button.connect("toggled", self.on_marker_button_toggle)
-        navbar_button.connect("toggled", self.on_navbar_button_toggle)
-        time_button.connect("toggled", self.on_unit_change, "time")
-        step_button.connect("toggled", self.on_unit_change, "step")
-
-        plotvbox = builder.get_object("plotvbox")
-        plotvbox.pack_start(self.anim_plot.create_widget(window))
-        self.pack_start(vbox)
-        self.simulator = simulation.VisualSimulation(self.graph)
-        self.node_selector = NodeSelector(self.graph)
-        self.controller = sc.SimulationController(self, toolbar)
-
-        properties_store = builder.get_object("propertystore")
-        self.state_stats = statistics.StateStatistics(properties_store)
-        self.state_stats.init()
-
-        info_store = builder.get_object("infostore")
-        self.sim_stats = statistics.SimulationStatistics(info_store)
-        self.sim_stats.init()
-        self.sim_stats.update_graph(self.filename, self.graph)
-        self.show_all()
+        return canvas
 
     def on_marker_button_toggle(self, button):
         marker = ""
