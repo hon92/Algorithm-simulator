@@ -629,6 +629,10 @@ class VizualSimulationTab(CloseTab):
 
     def clear_plots(self):
         for ax in self.anim_plot.get_figure().axes:
+            legend = ax.get_legend()
+            if legend:
+                legend.remove()
+
             for line in ax.get_lines():
                 line.remove()
         self.anim_plot.get_figure().canvas.draw()

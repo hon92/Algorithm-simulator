@@ -379,6 +379,9 @@ class AnimPlot():
         return self.plot.get_widget_with_navbar(window)
 
     def start(self):
+        for pl in self.plot.plots:
+            pl.dispose()
+        self.plot.plots = []
         self.plot.pre_process()
         self.init_plot()
         self.plot.post_process()
