@@ -1,6 +1,6 @@
 import projectloader as pl
 import graphmanager
-from gui.exceptions import ProjectException
+from gui import exceptions as exc
 
 class Project():
     def __init__(self, project_file):
@@ -43,11 +43,11 @@ class Project():
             try:
                 project_name, files = self.project_loader.load()
             except Exception as ex:
-                raise ProjectException(ex.message)
+                raise exc.ProjectException("Project file is corrupted")
             if project_name:
                 self.set_name(project_name)
             for filename in files:
-                self.load_graph_file(filename)
+                self.graph_manager.register_graph(filename)
 
     def save(self):
         return self.project_loader.save(self.name, self.get_files())
@@ -57,7 +57,9 @@ class Project():
             t.close()
 
     def load_graph_file(self, filename):
-        return self.graph_manager.register_graph(filename)
+        if filename in self.graph_manager.graphs:
+            raise exc.ExistingGraphException("'{0}' is already in project".format(filename))
+        self.graph_manager.register_graph(filename)
 
     def remove_graph_file(self, filename):
         self.graph_manager.unregister_graph(filename)

@@ -3,7 +3,7 @@ import paths
 import dot
 import subprocess
 import os
-from gui.exceptions import GraphException, VisibleGraphException
+from gui import exceptions as ex
 
 class GraphManager():
     POOL_SIZE = 2
@@ -15,17 +15,18 @@ class GraphManager():
         return [filename for filename in self.graphs]
 
     def register_graph(self, filename):
-        if not filename.endswith(".xml") or not os.path.exists(filename):
-            raise Exception("'{0}' is invalid graph filename".format(filename))
+        if not filename.endswith(".xml"):
+            raise ex.ProjectException("'{0}' is invalid graph filename".format(filename))
+        if not os.path.exists(filename):
+            raise ex.ProjectException("'{0}' not exists".format(filename))
+        if filename in self.graphs:
+            return
         try:
-            if filename in self.graphs:
-                raise Exception("'{0}' is already in project".format(filename))
-
             graph = self.get_graph_now(filename)
             self.graphs[filename] = [graph]
             self.visible_graphs[filename] = []
-        except GraphException:
-            raise Exception("Graph in '{0}' is corrupted".format(filename))
+        except Exception:
+            raise ex.GraphException("Graph in '{0}' is corrupted".format(filename))
 
     def unregister_graph(self, filename):
         if filename in self.graphs:
@@ -78,6 +79,7 @@ class GraphManager():
     def get_visible_graph_now(self, filename):
         graph = self.get_graph(filename)
         new_file = self._make_svg_file(graph, filename)
+        visible_graph = None
         if new_file:
             visible_graph = graphloader.SVGVisibleGraphLoader(graph, new_file).load()
         self.return_graph(filename, graph)
@@ -86,7 +88,7 @@ class GraphManager():
     def return_graph(self, filename, graph, visibile_graf = False):
         if visibile_graf:
             current_graphs = self.visible_graphs[filename]
-        else: 
+        else:
             current_graphs = self.graphs[filename]
 
         if len(current_graphs) < self.POOL_SIZE:

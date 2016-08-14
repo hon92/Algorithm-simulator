@@ -8,7 +8,7 @@ import gobject
 import appargs
 from gui.dialogs import dialog
 from project import Project
-from gui.exceptions import ProjectException
+from gui import exceptions as exc
 from sim import processfactory as pf 
 
 gobject.threads_init()
@@ -72,9 +72,8 @@ class App():
                 self._open_project(project)
                 msg = "Project '{0}' was opened".format(project.get_name())
                 self.window.console.writeln(msg)
-            except ProjectException:
-                msg = "Project '{0}' is corrupted".format(project.get_name())
-                self.window.console.writeln(msg, "err")
+            except Exception as ex:
+                self.window.console.writeln(ex.message, "err")
 
     def close_project(self):
         if self.project:
