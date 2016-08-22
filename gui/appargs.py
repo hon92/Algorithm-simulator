@@ -1,19 +1,19 @@
 import argparse
 import sys
-from sim.processes import process
+from sim import processfactory as pf
 
 class AppArgs:
     def __init__(self, app, args):
         self.app = app
         self.args = args
         self.parser = argparse.ArgumentParser()
-        self.parser.add_argument("-project", type = str, help = "Project file location")
-        self.parser.add_argument("-select", type = int,
+        self.parser.add_argument("-p", "--project", type = str, help = "Project file location")
+        self.parser.add_argument("-s", "--select", type = list,
                             help = "Graph position in project (starting from 1)")
-        self.parser.add_argument("-run", type = str, help = "Algorithm used for simulation")
-        self.parser.add_argument("-processes", type = int,
+        self.parser.add_argument("-r", "--run", type = str, help = "Algorithm used for simulation")
+        self.parser.add_argument("-pr", "--processes", type = int,
                             help = "Process count used for algorithm")
-        self.parser.add_argument("-count", type = int,
+        self.parser.add_argument("-c", "--count", type = int,
                             help = "Simulation count")
 
     def solve(self):
@@ -23,17 +23,31 @@ class AppArgs:
             self.app.open_project(args.project)
             if args.select:
                 project_files = self.app.project.get_files()
-                args.select -= 1
-                if args.select < 0 or args.select >= len(project_files):
-                    self.on_arg_error("Graph not exist in project")
+                used = []
+                for s in args.select:
+                    if s == " " or s == ",":
+                        continue
 
-                files = [project_files[args.select]]
+                    try:
+                        val = int(s)
+                    except:
+                        self.on_arg_error("Selection must be list of integers")
+
+                    val -= 1
+                    if val < 0 or val >= len(project_files):
+                        msg = "Selection must be between 1 to {0}"
+                        self.on_arg_error(msg.format(len(project_files)))
+                    if val not in used:
+                        used.append(val)
+
+                files = [project_files[i] for i in used]
+
                 sim_count = 1
-                process_type = process.get_processes_names()[0]
+                process_type = pf.get_processes_names()[0]
                 process_count = 1
 
                 if args.run:
-                    if args.run not in process.get_processes_names():
+                    if args.run not in pf.get_processes_names():
                         self.on_arg_error("Process type not valid")
                     process_type = args.run
 
