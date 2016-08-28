@@ -50,8 +50,8 @@ def build(bld):
     bld(features='py', source=bld.path.ant_glob('gui/**/*.py'), install_from='.')
     bld(features='py', source=bld.path.ant_glob('misc/**/*.py'), install_from='.')
 
+    cwd = str(bld.path) + "/"
     glades_dir = bld.path.find_dir("gui/dialogs/glade_dialogs")
     icons_dir = bld.path.find_dir("resources/icons")
-
-    bld.install_files(glade_files_dir, glades_dir.ant_glob("**/*.glade"))
-    bld.install_files(icons_files_dir, icons_dir.ant_glob("**/*.png"))
+    bld.install_files(cwd + glade_files_dir, glades_dir.ant_glob("**/*.glade"))
+    bld.install_files(cwd + icons_files_dir, icons_dir.ant_glob("**/*.png"))
