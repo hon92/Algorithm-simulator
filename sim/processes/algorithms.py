@@ -25,8 +25,7 @@ task to another process which is waiting for work."
                     found = False
                     for p in self.comunicator.get_processes():
                         if p.storage.get_size() == 0:
-                            self.comunicator.send(node, p)
-                            p.notify()
+                            self.comunicator.send_node(node, p.id)
                             found = True
                             break
                     if found:
@@ -74,8 +73,7 @@ send new task."
                         else:
                             processes = self.comunicator.get_processes()
                             p = processes[i]
-                            self.comunicator.send(new_node, p)
-                            p.notify()
+                            self.comunicator.send_node(new_node, p.id)
             else:
                 yield self.wait()
 
@@ -85,9 +83,10 @@ send new task."
             return r.randint(0, max)
         return 0
 
+
 class Algorithm3(process.GraphProcess):
     NAME = "Alg 3"
-    DESCRIPTION = "Testing alg"
+    DESCRIPTION = "Sending new node to next process"
 
     def __init__(self, id, env, graph):
         process.GraphProcess.__init__(self, id, self.NAME, env, graph)
@@ -99,6 +98,7 @@ class Algorithm3(process.GraphProcess):
             self.graph.root.discover(self.id)
 
     def run(self):
+        process_count = self.get_world_comunicator().get_process_count()
         while True:
             self.clock.tick()
             if self.storage.get_size() > 0:
@@ -107,7 +107,43 @@ class Algorithm3(process.GraphProcess):
                     yield self.solve_edge(edge)
                     new_node = edge.get_destination()
                     if not new_node.is_discovered():
-                        new_node.discover(self.id)
+                        next = self.id + 1 % process_count
+                        if next != self.id:
+                            self.comunicator.send_node(new_node, next)
+                            new_node.discover(next)
+                        else:
+                            new_node.discover(self.id)
                         self.storage.put(new_node)
             else:
                 yield self.wait()
+
+class PingPongExample(process.GraphProcess):
+    NAME = "PingPong"
+    DESCRIPTION = "Example of using blocking 'send' and 'receive' message in process"
+
+    def __init__(self, id, env, graph):
+        process.GraphProcess.__init__(self, id, self.NAME, env, graph)
+
+    def run(self):
+        process_count = self.get_world_comunicator().get_process_count()
+        if process_count < 2:
+            self.log("need atleast two processes for pingpong", "err")
+            yield self.wait()
+
+        PING_PONG_LIMIT = 10
+        world_rank = self.id
+        ping_pong_count = 0
+        partner_rank = (world_rank + 1) % 2
+        while (ping_pong_count < PING_PONG_LIMIT):
+            if (world_rank == ping_pong_count % 2):
+                ping_pong_count += 1
+                yield self.comunicator.send(ping_pong_count, partner_rank)
+                self.log("{0} send incremented value {1} to process {2}".format(world_rank,
+                                                                                  ping_pong_count,
+                                                                                  partner_rank))
+            else:
+                val = yield self.comunicator.receive(partner_rank)
+                ping_pong_count = val
+                self.log("{0} received {1} from process {2}".format(world_rank,
+                                                                    ping_pong_count,
+                                                                    partner_rank))

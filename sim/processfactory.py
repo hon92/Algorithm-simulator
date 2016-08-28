@@ -5,7 +5,8 @@ _pre_process_path = "sim.processes."
 # tuple (class_name, file), file must be inside processes package
 available_processes = [("Algorithm1", "algorithms"),
                        ("Algorithm2", "algorithms"),
-                       ("Algorithm3", "algorithms")]
+                       ("Algorithm3", "algorithms"),
+                       ("PingPongExample", "algorithms")]
 loaded = False
 _loaded_classes = []
 algs = {}

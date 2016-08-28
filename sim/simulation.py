@@ -2,6 +2,7 @@ import simpy
 import processfactory as pf
 from processes import process
 from gui import events
+from sim.processes.process import WorldComunicator
 
 class AbstractSimulation(events.EventSource):
     def __init__(self):
@@ -55,10 +56,9 @@ class Simulation(AbstractSimulation):
 
     def prepare_processes(self):
         self.process_factory.reset_id()
-
+        world_com = WorldComunicator(self.processes)
         for process in self.processes:
-            op = [p for p in self.processes if p.get_id() != process.get_id()]
-            process.set_processes(op)
+            process.comunicator.set_world_comunicator(world_com)
             process.initialize()
             e = self.env.process(process.run())
             self.process_events.append(e)

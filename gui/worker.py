@@ -1,3 +1,5 @@
+import traceback
+import sys
 import threading
 import Queue
 
@@ -47,7 +49,9 @@ class SimWorker(Worker):
         try:
             task.start()
         except Exception as ex:
-            self._error(task, ex.message)
+            exc_type, exc_value, exc_tb = sys.exc_info()
+            err = traceback.format_exception(exc_type, exc_value, exc_tb)
+            self._error(task, "".join(err))
 
     def _error(self, sim, msg):
         for cb in self.error_callbacks:
