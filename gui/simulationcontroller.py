@@ -101,7 +101,7 @@ class SimulationController():
         self.buttons = self.create_buttons()
         self.step_count = 0
         self.time = 0
-        self.timer = timer.Timer(settings.VIZ_SIMULATION_TIMER, self.step)
+        self.timer = timer.Timer(settings.get("VIZ_SIMULATION_TIMER"), self.step)
         self.state = None
         self.set_state(IdleState(self))
 

@@ -14,13 +14,15 @@ class Window(gtk.Window):
 
     def _create_notebook(self):
         self.notebook = gtk.Notebook()
+        self.notebook.set_scrollable(True)
+        self.notebook.popup_enable()
         self.notebook.set_tab_pos(gtk.POS_TOP)
         return self.notebook
 
     def _create_window(self):
         self.set_title("")
         self.set_position(gtk.WIN_POS_CENTER)
-        self.set_size_request(settings.WINDOW_WIDTH, settings.WINDOW_HEIGHT)
+        self.set_size_request(settings.get("WINDOW_WIDTH"), settings.get("WINDOW_HEIGHT"))
         self.connect("destroy", self.close)
 
         vbox = gtk.VBox()
@@ -80,9 +82,11 @@ class Window(gtk.Window):
         return gtk.Window.set_title(self, title)
 
     def create_tab(self, tab):
+        tab.create()
         self.notebook.append_page(tab, tab.get_tab_label())
+        self.notebook.set_menu_label_text(tab, tab.get_title())
         self.notebook.set_current_page(self.notebook.get_n_pages() - 1)
-        if self.app.project:
+        if self.app.project and not tab.is_project_independent():
             self.app.project.add_tab(tab)
         return tab
 
@@ -95,6 +99,23 @@ class Window(gtk.Window):
             tab.destroy()
             del tab
 
+    def get_tab(self, name):
+        for i in xrange(self.notebook.get_n_pages()):
+            tab = self.notebook.get_nth_page(i)
+            if tab.get_title() == name:
+                return tab
+        return None
+
+    def get_tab_at_pos(self, position):
+        if position < 0 or position >= self.notebook.get_n_pages():
+            return None
+        return self.notebook.get_nth_page(position)
+
+    def switch_to_tab(self, tab):
+        pos = self.notebook.page_num(tab)
+        if pos != -1:
+            self.notebook.set_current_page(pos) 
+
     def show(self):
         self.show_all()
 
@@ -106,7 +127,7 @@ class Console(gtk.HBox):
         gtk.HBox.__init__(self)
         self.buffer = gtk.TextBuffer()
         self.textview = gtk.TextView(self.buffer)
-        font = pango.FontDescription(settings.CONSOLE_FONT)
+        font = pango.FontDescription(settings.get("CONSOLE_FONT"))
         self.textview.modify_font(font)
         self.textview.set_editable(False)
         self.buffer.create_tag("out", foreground = "black")
@@ -141,7 +162,7 @@ class Console(gtk.HBox):
         vbox.pack_start(clear_button, False, False)
         vbox.pack_start(export_button, False, False)
         self.pack_start(vbox, False, False)
-        self.set_size_request(-1, settings.CONSOLE_HEIGHT)
+        self.set_size_request(-1, settings.get("CONSOLE_HEIGHT"))
 
     def _write_to_buffer(self, text, tag, scroll_end = True):
         self.buffer.insert_with_tags_by_name(self.buffer.get_end_iter(),

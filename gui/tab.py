@@ -14,27 +14,53 @@ from sim import processfactory as pf
 from canvas import Canvas
 from nodeselector import NodeSelector
 from gui import statistics
-
+from gui import gladeloader as gl
+from pango import FontDescription
 
 class Tab(gtk.VBox):
     def __init__(self, window, title):
         gtk.VBox.__init__(self)
         self.win = window
+        self.label = gtk.Label(title)
         self.show()
-        self.title_text = title
-        self.label = gtk.Label(self.title_text) 
 
     def set_title(self, title):
         self.label.set_text(title)
 
     def get_title(self):
-        return self.title_text
+        return self.label.get_text()
 
     def get_tab_label(self):
         return self.label
 
     def close(self):
         self.win.remove_tab(self)
+
+    def is_project_independent(self):
+        return False
+
+    def pre_build(self):
+        pass
+
+    def build(self):
+        pass
+
+    def post_build(self):
+        pass
+
+    def create_content_widget(self):
+        pass
+
+    def build_content(self):
+        widget = self.build()
+        if widget:
+            self.pack_start(widget)
+
+    def create(self):
+        self.pre_build()
+        self.build_content()
+        self.post_build()
+        self.show_all()
 
 class CloseTab(Tab):
     def __init__(self, window, title):
@@ -64,20 +90,18 @@ class CloseTab(Tab):
 class WelcomeTab(CloseTab):
     def __init__(self, window, title):
         CloseTab.__init__(self, window, title)
-        self.pack_start(gtk.Label("Welcome in simulator"))
+
+    def build(self):
+        return gtk.Label("Welcome in simulator")
 
 class ProjectTab(Tab):
     def __init__(self, window, project):
         Tab.__init__(self, window, "Project")
         self.project = project
         self.win.set_title(project.get_name())
-        self._create_content()
 
-    def _create_content(self):
-        glade_file = paths.GLADE_DIALOG_DIRECTORY + "project_tab.glade"
-        builder = gtk.Builder()
-        builder.add_from_file(glade_file)
-
+    def build(self):
+        builder = gl.GladeLoader("project_tab").load()
         self.box = builder.get_object("vbox")
         self.treeview = builder.get_object("treeview")
         self.treeview.set_property("hover-selection", True)
@@ -91,7 +115,9 @@ class ProjectTab(Tab):
         self.process_num_button = builder.get_object("process_num_button")
         self.sim_num_button = builder.get_object("sim_num_button")
         self.alg_description = builder.get_object("alg_description")
-        self.pack_start(self.box)
+        return self.box
+
+    def post_build(self):
         self._connect_signals()
 
     def _connect_signals(self):
@@ -182,10 +208,11 @@ class ProjectTab(Tab):
     def run_vizual_simulations(self):
         for row in self.liststore:
             if row[0]:
-                if int(row[2]) > settings.MAX_VISIBLE_GRAPH_NODES:
+                max_visible_nodes = settings.get("MAX_VISIBLE_GRAPH_NODES")
+                if int(row[2]) > max_visible_nodes:
                     err_text = "Graph {0} was skipped because is too big" + \
                                " (max graph nodes count is {1})"
-                    err_text = err_text.format(row[1], str(settings.MAX_VISIBLE_GRAPH_NODES))
+                    err_text = err_text.format(row[1], str(max_visible_nodes))
                     self.win.console.writeln(err_text, "err")
                     continue
                 try:
@@ -208,21 +235,27 @@ class SimulatorTab(CloseTab):
     def __init__(self, window, title, filename, simulator):
         CloseTab.__init__(self, window, title)
         self.simulator = simulator
+        self.plots = []
+        self.filename = filename
+
+    def build(self):
         sw = gtk.ScrolledWindow()
         sw.set_policy(gtk.POLICY_AUTOMATIC, gtk.POLICY_AUTOMATIC)
         self.notebook = gtk.Notebook()
         self.notebook.set_tab_pos(gtk.POS_LEFT)
         sw.add_with_viewport(self.notebook)
-        self.statistics = self._create_statistics(filename)
-        self.pack_start(sw)
-        self.plots = []
+        return sw
+
+    def post_build(self):
+        self.stats_vbox = self._create_statistics(self.filename)
+        self.notebook.append_page(self.stats_vbox, gtk.Label("Results"))
+        self.create_plots()
 
     def create_plots(self):
         def add_plot_page(widget, title):
             self.notebook.append_page(widget, gtk.Label(title))
             self.plots.append(widget.plot)
 
-        self.notebook.append_page(self.statistics, gtk.Label("Results"))
         memory_usage_plot = plot.MemoryUsagePlot(self.simulator)
         calculated_plot = plot.CalculatedBarPlot(self.simulator)
 
@@ -235,19 +268,15 @@ class SimulatorTab(CloseTab):
             add_plot_page(process_plot.get_widget_with_navbar(self.win), process_plot.get_title())
 
         self.notebook.connect("switch-page", self.on_page_switch)
-        self.show_all()
 
     def on_page_switch(self, notebook, page, num):
-        if num > 0:
-            tab = notebook.get_nth_page(num)
-            if tab:
-                selected_plot = tab.plot 
-                selected_plot.draw()
+        tab = self.notebook.get_nth_page(num)
+        if tab and hasattr(tab, "plot"):
+            tab.plot.draw()
 
     def _create_statistics(self, filename):
         vbox = gtk.VBox()
-        builder = gtk.Builder()
-        builder.add_from_file(paths.GLADE_DIALOG_DIRECTORY + "tree_statistics.glade")
+        builder = gl.GladeLoader("tree_statistics").load()
         stat_widget = builder.get_object("vbox")
         info_store = builder.get_object("infostore")
         sim_stats = statistics.SimulationStatistics(info_store)
@@ -296,41 +325,8 @@ class SimulationProgressTab(CloseTab):
         self.worker.add_callback(lambda s: gtk.idle_add(self.on_sim_complete, s))
         self.worker.add_error_callback(lambda s, msg: gtk.idle_add(self.on_sim_error, s, msg))
 
-        self._create_content()
-        self._prepare_data()
-        self.worker.start()
-        self.start_next_sim()
-
-    def _prepare_data(self):
-        sim_count = self.sim_props["sim_count"]
-        process_count = self.sim_props["process_count"]
-        process_type = self.sim_props["process_type"]
-        files = self.sim_props["files"]
-
-        for filename in files:
-            self.used_graphs[filename] = self.project.graph_manager.get_graph(filename)
-
-        order = 0
-        for _ in xrange(sim_count):
-            for filename in files:
-                graph = self.used_graphs[filename]
-                simulator = simulation.Simulation(graph)
-                simulator.register_n_processes(process_type, process_count)
-                for process in simulator.processes:
-                    process.connect("log", self.log_message)
-                process_info = "{0} - {1}({2})".format(ntpath.basename(filename),
-                                                      process_type,
-                                                      process_count)
-                order += 1
-                self.liststore.append([process_info, 0, self.WAITING, 0.0, filename, order])
-                self.worker.put(simulator)
-
-    def log_message(self, msg, tag):
-        self.win.console.writeln(msg, tag)
-
-    def _create_content(self):
-        builder = gtk.Builder()
-        builder.add_from_file(paths.GLADE_DIALOG_DIRECTORY + "simulation_progress_view.glade")
+    def build(self):
+        builder = gl.GladeLoader("simulation_progress_view").load()
         vbox = builder.get_object("vbox")
         self.treeview = builder.get_object("treeview")
         # model structure -> process type, progress, status, time, filename, order
@@ -345,18 +341,6 @@ class SimulationProgressTab(CloseTab):
         self.progress_col.set_sort_column_id(-1)
         self.status_col.set_sort_column_id(-1)
         self.time_col.set_sort_column_id(-1)
-
-        def col_clicked(treeview_column):
-            if self.finished:
-                self.name_col.set_sort_column_id(self.NAME_COL)
-                self.progress_col.set_sort_column_id(self.PROGRESS_COL)
-                self.status_col.set_sort_column_id(self.STATUS_COL)
-                self.time_col.set_sort_column_id(self.TIME_COL)
-
-        self.name_col.connect("clicked", col_clicked)
-        self.progress_col.connect("clicked", col_clicked)
-        self.status_col.connect("clicked", col_clicked)
-        self.time_col.connect("clicked", col_clicked)
 
         show_button = builder.get_object("show_button")
         export_button = builder.get_object("export_button")
@@ -385,9 +369,53 @@ class SimulationProgressTab(CloseTab):
                                       "Close Window-24.png",
                                       "Cancel simulation",
                                       self.on_cancel)
+        return vbox
 
-        self.pack_start(vbox)
-        self.show_all()
+    def post_build(self):
+        def col_clicked(treeview_column):
+            if self.finished:
+                self.name_col.set_sort_column_id(self.NAME_COL)
+                self.progress_col.set_sort_column_id(self.PROGRESS_COL)
+                self.status_col.set_sort_column_id(self.STATUS_COL)
+                self.time_col.set_sort_column_id(self.TIME_COL)
+
+        self.name_col.connect("clicked", col_clicked)
+        self.progress_col.connect("clicked", col_clicked)
+        self.status_col.connect("clicked", col_clicked)
+        self.time_col.connect("clicked", col_clicked)
+        self.prepare()
+        self.run()
+
+    def prepare(self):
+        sim_count = self.sim_props["sim_count"]
+        process_count = self.sim_props["process_count"]
+        process_type = self.sim_props["process_type"]
+        files = self.sim_props["files"]
+
+        for filename in files:
+            self.used_graphs[filename] = self.project.graph_manager.get_graph(filename)
+
+        order = 0
+        for _ in xrange(sim_count):
+            for filename in files:
+                graph = self.used_graphs[filename]
+                simulator = simulation.Simulation(graph)
+                simulator.register_n_processes(process_type, process_count)
+                for process in simulator.processes:
+                    process.connect("log", self.log_message)
+                process_info = "{0} - {1}({2})".format(ntpath.basename(filename),
+                                                      process_type,
+                                                      process_count)
+                order += 1
+                self.liststore.append([process_info, 0, self.WAITING, 0.0, filename, order])
+                self.worker.put(simulator)
+
+    def run(self):
+        self.worker.start()
+        self.start_next_sim()
+
+    def log_message(self, msg, tag):
+        self.win.console.writeln(msg, tag)
 
     def get_next_row(self):
         for row in self.liststore:
@@ -495,7 +523,6 @@ class SimulationProgressTab(CloseTab):
                                                  sim)
                     self.win.create_tab(simulator_tab)
                     self.opened_tabs.append(simulator_tab)
-                    simulator_tab.create_plots()
 
     def get_selected_row_iter(self):
         tree_selection = self.treeview.get_selection()
@@ -521,31 +548,22 @@ class VizualSimulationTab(CloseTab):
     def __init__(self, window, title, project, sim_properties):
         CloseTab.__init__(self, window, title)
         self.project = project
+        self.sim_properties = sim_properties
         self.filename = sim_properties["filename"]
         self.selected_node = None
         self.graph = self.project.graph_manager.get_visible_graph(self.filename)
         self.graph.reset()
         self.anim_plot = plot.VizualSimPlotAnim()
-        self.create_content()
-
         self.simulator = simulation.VisualSimulation(self.graph)
         self.node_selector = NodeSelector(self.graph)
-        self.controller = sc.SimulationController(self, self.toolbar)
-        self.state_stats = statistics.StateStatistics(self.properties_store)
-        self.state_stats.init()
 
-        self.sim_stats = statistics.SimulationStatistics(self.info_store)
-        self.sim_stats.init()
-        self.sim_stats.update_graph(self.filename, self.graph)
-        self.show_all()
-        self.controller.run(sim_properties)
-
-    def create_content(self):
-        builder = gtk.Builder()
-        builder.add_from_file(paths.GLADE_DIALOG_DIRECTORY + "visual_sim_tab.glade")
+    def build(self):
+        builder = gl.GladeLoader("visual_sim_tab").load()
         vbox = builder.get_object("vbox")
         self.toolbar = builder.get_object("toolbar")
         self.statusbar = builder.get_object("statusbar")
+        self.properties_store = builder.get_object("propertystore")
+        self.info_store = builder.get_object("infostore")
         self.status_ctx = self.statusbar.get_context_id("Simulation state")
 
         canvas_container = builder.get_object("canvascontainer")
@@ -555,24 +573,29 @@ class VizualSimulationTab(CloseTab):
         self.navbar_button = builder.get_object("navbarbutton")
         self.time_button = builder.get_object("timebutton")
         self.step_button = builder.get_object("stepbutton")
+
+        plotvbox = builder.get_object("plotvbox")
+        plotvbox.pack_start(self.anim_plot.create_widget(self.win))
+        return vbox
+
+    def post_build(self):
         self.marker_button.set_active(self.anim_plot.has_marker())
         self.navbar_button.set_active(self.anim_plot.has_navbar())
         if self.anim_plot.get_unit() == "time":
             self.time_button.set_active(True)
         else:
             self.step_button.set_active(True)
-
         self.marker_button.connect("toggled", self.on_marker_button_toggle)
         self.navbar_button.connect("toggled", self.on_navbar_button_toggle)
         self.time_button.connect("toggled", self.on_unit_change, "time")
         self.step_button.connect("toggled", self.on_unit_change, "step")
-
-        plotvbox = builder.get_object("plotvbox")
-        plotvbox.pack_start(self.anim_plot.create_widget(self.win))
-        self.pack_start(vbox)
-
-        self.properties_store = builder.get_object("propertystore")
-        self.info_store = builder.get_object("infostore")
+        self.controller = sc.SimulationController(self, self.toolbar)
+        self.state_stats = statistics.StateStatistics(self.properties_store)
+        self.state_stats.init()
+        self.sim_stats = statistics.SimulationStatistics(self.info_store)
+        self.sim_stats.init()
+        self.sim_stats.update_graph(self.filename, self.graph)
+        self.controller.run(self.sim_properties)
 
     def init_canvas(self):
         canvas = Canvas()
@@ -656,3 +679,82 @@ class VizualSimulationTab(CloseTab):
                                                 self.graph, True)
         self.canvas.dispose()
         CloseTab.close(self)
+
+class SettingsTab(CloseTab):
+    def __init__(self, window):
+        CloseTab.__init__(self, window, "Settings")
+
+    def build(self):
+        hbox = gtk.HBox()
+        self.notebook = gtk.Notebook()
+        self.notebook.set_tab_pos(gtk.POS_LEFT)
+        hbox.pack_start(self.notebook)
+
+        def add_page(content_widget, title):
+            page = self.create_page(content_widget, title)
+            self.notebook.append_page(page, gtk.Label(title))
+
+        content_widget = self._general_page()
+        add_page(content_widget, "General")
+        
+        content_widget = gtk.Button("test")
+        add_page(content_widget, "Simulation")
+        content_widget = gtk.Button("test")
+        add_page(content_widget, "Visual simulation")
+        content_widget = gtk.Button("test")
+        add_page(content_widget, "General")
+        
+        return hbox
+
+    def create_page(self, content_widget, title):
+        builder = gl.GladeLoader("settings_page").load()
+        vbox = builder.get_object("vbox")
+        title_label = builder.get_object("title_label")
+        title_label.set_text(title)
+        content_vbox = builder.get_object("content_vbox")
+        content_vbox.pack_start(content_widget)
+        apply_button = builder.get_object("apply_button")
+        restore_button = builder.get_object("restore_button")
+        apply_button.connect("clicked", self.on_apply_button)
+        restore_button.connect("clicked", self.on_restore_button)
+        return vbox
+
+    def is_project_independent(self):
+        return True
+
+    def _general_page(self):
+        builder = gl.GladeLoader("general_settings_page").load()
+        vbox = builder.get_object("vbox")
+        window_width_spin = builder.get_object("window_w_spin")
+        window_height_spin = builder.get_object("window_h_spin")
+        console_height_spin = builder.get_object("console_h_spin")
+        font_entry = builder.get_object("font_entry")
+
+        font = settings.get("CONSOLE_FONT")
+        font_desc = FontDescription(font)
+        if font_desc:
+            font_entry.set_text(font)
+
+        window_width_spin.set_adjustment(gtk.Adjustment(settings.get("WINDOW_WIDTH"),
+                                                        settings.WINDOW_WIDTH_MIN,
+                                                        settings.WINDOW_WIDTH_MAX,
+                                                        1,
+                                                        10))
+        window_height_spin.set_adjustment(gtk.Adjustment(settings.get("WINDOW_HEIGHT"),
+                                                         settings.WINDOW_HEIGHT_MIN,
+                                                         settings.WINDOW_HEIGHT_MAX,
+                                                         1,
+                                                         10))
+        console_height_spin.set_adjustment(gtk.Adjustment(settings.get("CONSOLE_HEIGHT"),
+                                                          settings.CONSOLE_HEIGHT_MIN,
+                                                          settings.CONSOLE_HEIGHT_MAX,
+                                                          1,
+                                                          10))
+        return vbox
+
+    def on_apply_button(self, w):
+        print w
+
+    def on_restore_button(self, w):
+        print w
+

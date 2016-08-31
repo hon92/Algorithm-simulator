@@ -6,11 +6,12 @@ import window
 import tab
 import gobject
 import appargs
+import settings
 from gui.dialogs import dialog
 from project import Project
-from gui import exceptions as exc
-from sim import processfactory as pf 
+from sim import processfactory as pf
 
+settings.init()
 gobject.threads_init()
 pf.load()
 
@@ -95,8 +96,12 @@ class App():
                 self.window.console.writeln(msg.format(self.project.get_name()), "err")
 
     def open_settings(self):
-        if self.project:
-            pass
+        settings_tab = self.window.get_tab("Settings")
+        if settings_tab:
+            self.window.switch_to_tab(settings_tab)
+        else:
+            settings_tab = tab.SettingsTab(self.window)
+            self.window.create_tab(settings_tab)
 
     def start_simulation(self):
         if self.project:
