@@ -1,3 +1,10 @@
+from xml.etree import ElementTree
+from xml.dom import minidom
+
+def get_pretty_xml(elem):
+    rough_string = ElementTree.tostring(elem, 'utf-8')
+    reparsed = minidom.parseString(rough_string)
+    return reparsed.toprettyxml(indent="  ")
 
 def hex_to_rgb(value):
     value = value.lstrip("#")

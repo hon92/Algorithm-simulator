@@ -1,11 +1,6 @@
 from xml.etree.cElementTree import Element, SubElement, parse
-from xml.etree import ElementTree
-from xml.dom import minidom
+from misc import utils
 
-def get_pretty_xml(elem):
-    rough_string = ElementTree.tostring(elem, 'utf-8')
-    reparsed = minidom.parseString(rough_string)
-    return reparsed.toprettyxml(indent="  ")
 
 class ProjectLoader():
     def __init__(self, filename):
@@ -34,7 +29,7 @@ class ProjectLoader():
                 f_node.set("path", filename)
         
             with open(self.filename, "w") as f:
-                f.write(get_pretty_xml(root))
+                f.write(utils.get_pretty_xml(root))
                 f.flush()
             return True
         except Exception:
