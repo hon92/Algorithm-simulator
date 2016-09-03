@@ -15,7 +15,6 @@ from canvas import Canvas
 from nodeselector import NodeSelector
 from gui import statistics
 from gui import gladeloader as gl
-from pango import FontDescription
 
 class Tab(gtk.VBox):
     def __init__(self, window, title):
@@ -688,73 +687,29 @@ class SettingsTab(CloseTab):
         hbox = gtk.HBox()
         self.notebook = gtk.Notebook()
         self.notebook.set_tab_pos(gtk.POS_LEFT)
+        self.notebook.set_scrollable(True)
         hbox.pack_start(self.notebook)
 
-        def add_page(content_widget, title):
-            page = self.create_page(content_widget, title)
-            self.notebook.append_page(page, gtk.Label(title))
+        def add_setting_page(setting_page):
+            setting_page.connect("apply", self.on_settings_apply)
+            setting_page.connect("restore", self.on_settings_restore)
+            self.notebook.append_page(setting_page.build(), setting_page.get_label())
 
-        content_widget = self._general_page()
-        add_page(content_widget, "General")
-        
-        content_widget = gtk.Button("test")
-        add_page(content_widget, "Simulation")
-        content_widget = gtk.Button("test")
-        add_page(content_widget, "Visual simulation")
-        content_widget = gtk.Button("test")
-        add_page(content_widget, "General")
-        
+        general_settings = settings.GeneralSettingPage()
+        simulation_settings = settings.SimulationSettingPage()
+        visual_sim_settings = settings.VisualSimSettingPage()
+
+        add_setting_page(general_settings)
+        add_setting_page(simulation_settings)
+        add_setting_page(visual_sim_settings)
         return hbox
-
-    def create_page(self, content_widget, title):
-        builder = gl.GladeLoader("settings_page").load()
-        vbox = builder.get_object("vbox")
-        title_label = builder.get_object("title_label")
-        title_label.set_text(title)
-        content_vbox = builder.get_object("content_vbox")
-        content_vbox.pack_start(content_widget)
-        apply_button = builder.get_object("apply_button")
-        restore_button = builder.get_object("restore_button")
-        apply_button.connect("clicked", self.on_apply_button)
-        restore_button.connect("clicked", self.on_restore_button)
-        return vbox
 
     def is_project_independent(self):
         return True
 
-    def _general_page(self):
-        builder = gl.GladeLoader("general_settings_page").load()
-        vbox = builder.get_object("vbox")
-        window_width_spin = builder.get_object("window_w_spin")
-        window_height_spin = builder.get_object("window_h_spin")
-        console_height_spin = builder.get_object("console_h_spin")
-        font_entry = builder.get_object("font_entry")
+    def on_settings_apply(self):
+        self.win.console.writeln("Settings saved")
 
-        font = settings.get("CONSOLE_FONT")
-        font_desc = FontDescription(font)
-        if font_desc:
-            font_entry.set_text(font)
-
-        window_width_spin.set_adjustment(gtk.Adjustment(settings.get("WINDOW_WIDTH"),
-                                                        settings.WINDOW_WIDTH_MIN,
-                                                        settings.WINDOW_WIDTH_MAX,
-                                                        1,
-                                                        10))
-        window_height_spin.set_adjustment(gtk.Adjustment(settings.get("WINDOW_HEIGHT"),
-                                                         settings.WINDOW_HEIGHT_MIN,
-                                                         settings.WINDOW_HEIGHT_MAX,
-                                                         1,
-                                                         10))
-        console_height_spin.set_adjustment(gtk.Adjustment(settings.get("CONSOLE_HEIGHT"),
-                                                          settings.CONSOLE_HEIGHT_MIN,
-                                                          settings.CONSOLE_HEIGHT_MAX,
-                                                          1,
-                                                          10))
-        return vbox
-
-    def on_apply_button(self, w):
-        print w
-
-    def on_restore_button(self, w):
-        print w
+    def on_settings_restore(self):
+        self.win.console.writeln("Settings restored")
 
