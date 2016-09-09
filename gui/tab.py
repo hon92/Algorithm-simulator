@@ -223,10 +223,13 @@ class ProjectTab(Tab):
                                       "process_count": process_count
                                      }
                     title = "Viz. sim - " + ntpath.basename(row[1])
-                    self.win.create_tab(VizualSimulationTab(self.win,
+                    try:
+                        self.win.create_tab(VizualSimulationTab(self.win,
                                                             title,
                                                             self.project,
                                                             sim_properties))
+                    except Exception as ex:
+                        self.win.console.writeln(ex.message, "err")
                 except VisibleGraphException as ex:
                     self.win.console.writeln(ex.message, "err")
 
@@ -544,6 +547,7 @@ class SimulationProgressTab(CloseTab):
         CloseTab.close(self)
 
 class VizualSimulationTab(CloseTab):
+    CANVAS_MAX_SIZE = 5000
     def __init__(self, window, title, project, sim_properties):
         CloseTab.__init__(self, window, title)
         self.project = project
@@ -551,6 +555,8 @@ class VizualSimulationTab(CloseTab):
         self.filename = sim_properties["filename"]
         self.selected_node = None
         self.graph = self.project.graph_manager.get_visible_graph(self.filename)
+        if self.graph.width > self.CANVAS_MAX_SIZE or self.graph.height > self.CANVAS_MAX_SIZE:
+            raise Exception("Graph is too big for drawing on canvas")
         self.graph.reset()
         self.anim_plot = plot.VizualSimPlotAnim()
         self.simulator = simulation.VisualSimulation(self.graph)
