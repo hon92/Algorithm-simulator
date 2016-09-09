@@ -133,6 +133,16 @@ class Edge():
     def complete(self, by):
         self.completed_by = by
 
+    def get_label(self):
+        return self.label
+
+    def get_events_count(self):
+        return self.events_count
+
+    def get_pids(self):
+        return self.pids
+
+
 class VisibleGraph(Graph):
     def __init__(self, scale, width, height):
         Graph.__init__(self)
