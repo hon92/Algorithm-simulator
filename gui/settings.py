@@ -40,19 +40,18 @@ user_settings = { "VIZ_SIMULATION_TIMER": VIZ_SIMULATION_TIMER_DEF,
                   }
 
 def init():
-    config_file = _get_config_file()
+    config_file = get_config_file()
 
-    if not config_file:
-        _save_settings(config_file)
-    else:
+    if config_file_exists():
         _load_settings(config_file)
-
-def _get_config_file():
-    config_file = os.path.join(paths.ROOT, CONFIG_FILENAME)
-    if not os.path.exists(config_file):
-        return None
     else:
-        return config_file
+        _save_settings(config_file)
+
+def get_config_file():
+    return os.path.join(paths.ROOT, CONFIG_FILENAME)
+
+def config_file_exists():
+    return os.path.exists(get_config_file())
 
 def _load_settings(config_filename):
         tree = parse(config_filename);
@@ -84,21 +83,17 @@ def _load_settings(config_filename):
             user_settings[key] = val
 
 def _save_settings(config_filename):
-        try:
-            root = Element("settings")
-            root.set("name", WINDOW_TITLE)
-            root.set("version", VERSION)
-            for k, v in user_settings.iteritems():
-                set_elem = SubElement(root, "set")
-                set_elem.set("name", str(k))
-                set_elem.set("value", str(v))
+        root = Element("settings")
+        root.set("name", WINDOW_TITLE)
+        root.set("version", VERSION)
+        for k, v in user_settings.iteritems():
+            set_elem = SubElement(root, "set")
+            set_elem.set("name", str(k))
+            set_elem.set("value", str(v))
 
-            with open(config_filename, "w") as f:
-                f.write(utils.get_pretty_xml(root))
-                f.flush()
-            return True
-        except Exception as ex:
-            return False
+        with open(config_filename, "w") as f:
+            f.write(utils.get_pretty_xml(root))
+            f.flush()
 
 def get(settings_name):
     if settings_name in user_settings:
@@ -130,9 +125,7 @@ class SettingPage(EventSource):
         pass
 
     def commit(self):
-        config_file = _get_config_file()
-        if config_file:
-            _save_settings(config_file)
+        _save_settings(get_config_file())
 
     def get_page_name(self):
         return self.page_name
