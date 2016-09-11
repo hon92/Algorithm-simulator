@@ -115,22 +115,28 @@ class SVGVisibleGraphLoader(AbstractGraphLoader):
 
         nodes_items = graph.findall(self.s("g[@class='node']"))
         edges_items = graph.findall(self.s("g[@class='edge']"))
-        
+
         for node in nodes_items:
             self.solve_node(node)
         for edge in edges_items:
             self.solve_edge(edge)
 
-        for name, n in self.graph.nodes.iteritems():
-            if len(n.get_edges()) > 1:
-                perm = [(e.time, e.label) for e in self.graph_model.get_node(name).edges]
-                old = n.get_edges()
-                edges = []
-                for p in perm:
-                    f = [e for e in old if e.time == p[0] and e.label == p[1]]
-                    edges.append(f[0])
-                    old.remove(f[0])
-                n.edges = edges
+        for node in self.graph.nodes.values():
+            edges = node.get_edges()
+            sorted_edges = []
+            if len(edges) == 0:
+                continue
+            model_edges = self.graph_model.get_node(node.get_name()).get_edges()
+
+            for model_edge in model_edges:
+                fe = [e for e in edges if e.time == model_edge.get_time() and e.label == model_edge.get_label()]
+
+                if len(fe) > 0:
+                    sorted_edges.append(fe[0])
+                    edges.remove(fe[0])
+
+            node.edges = sorted_edges
+
         self.graph.set_root_node(self.graph_model.root.name)
 
     def solve_node(self, node):
