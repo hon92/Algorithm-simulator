@@ -78,7 +78,13 @@ class GraphManager():
 
     def get_visible_graph_now(self, filename):
         graph = self.get_graph(filename)
-        new_file = self._make_svg_file(graph, filename)
+        svg_file = filename.replace(".xml", ".svg")
+
+        if not os.path.exists(svg_file):
+            new_file = self._make_svg_file(graph, filename)
+        else:
+            new_file = svg_file
+
         visible_graph = None
         if new_file:
             visible_graph = graphloader.SVGVisibleGraphLoader(graph, new_file).load()
