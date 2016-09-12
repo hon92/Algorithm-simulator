@@ -1,9 +1,12 @@
 import projectloader as pl
 import graphmanager
 from gui import exceptions as exc
+from gui.events import EventSource
 
-class Project():
+class Project(EventSource):
     def __init__(self, project_file):
+        EventSource.__init__(self)
+        self.register_event("error")
         self.project_file = project_file
         self.name = ""
         self.opened_tabs = []
@@ -47,7 +50,10 @@ class Project():
             if project_name:
                 self.set_name(project_name)
             for filename in files:
-                self.graph_manager.register_graph(filename)
+                try:
+                    self.graph_manager.register_graph(filename)
+                except Exception as ex:
+                    self.fire("error", "Graph open error: " + ex.message)
 
     def save(self):
         return self.project_loader.save(self.name, self.get_files())

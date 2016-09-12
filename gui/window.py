@@ -69,6 +69,9 @@ class Window(gtk.Window):
         simulation_menu = add_menu("Simulation")
         add_image_menu_item(simulation_menu, "Run", self.app.start_simulation, "Play-24.png")
         add_image_menu_item(simulation_menu, "Run graphics sim", self.app.start_graphics_simulation, "Flow Chart-24.png")
+
+        generation_menu = add_menu("Generate")
+        add_image_menu_item(generation_menu, "Graph", self.app.generate_graph, "Flow Chart-24.png")
         return menu
 
     def set_title(self, text):

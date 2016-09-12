@@ -1,5 +1,6 @@
 import paths
 import sys
+from gui.graphgenerator import GraphGenerator
 sys.path.append(paths.ROOT)
 import gtk
 import window
@@ -10,6 +11,7 @@ import settings
 from gui.dialogs import dialog
 from project import Project
 from sim import processfactory as pf
+from gui import gladeloader as gl
 
 settings.init()
 gobject.threads_init()
@@ -35,6 +37,10 @@ class App():
         gtk.main_quit()
 
     def _open_project(self, project):
+        def on_project_error(msg):
+            self.window.console.writeln(msg, "err")
+
+        project.connect("error", on_project_error)
         project.open()
         self.project = project
         project_tab = tab.ProjectTab(self.window, project)
@@ -110,3 +116,45 @@ class App():
     def start_graphics_simulation(self):
         if self.project:
             self.project.get_tab().run_vizual_simulations()
+
+    def generate_graph(self):
+        if self.project:
+            builder = gl.GladeLoader("generate_graph_dialog").load()
+            gen_dialog = builder.get_object("dialog")
+            gen_dialog.set_title("Generate graph settings")
+            gen_dialog.set_position(gtk.WIN_POS_CENTER)
+
+            filename_entry = builder.get_object("filename_entry")
+            nodes_count_spin = builder.get_object("nodes_count_spin")
+            edges_count_spin = builder.get_object("edges_count_spin")
+            seed_spin = builder.get_object("seed_spin")
+            file_chooser_button = builder.get_object("file_chooser_button")
+            insert_checkbutton = builder.get_object("insert_checkbutton")
+            properties = {}
+
+            def on_file_button_clicked(w):
+                graph_file = dialog.Dialog.get_factory("xml").save_as("Save graph to file")
+                if not graph_file:
+                    graph_file = "" 
+                filename_entry.set_text(graph_file)
+
+            file_chooser_button.connect("clicked", on_file_button_clicked)
+            response = gen_dialog.run()
+            if response:
+                try:
+                    graph_generator = GraphGenerator(filename_entry.get_text(),
+                                                     nodes_count_spin.get_value_as_int(),
+                                                     edges_count_spin.get_value_as_int(),
+                                                     properties,
+                                                     seed_spin.get_value_as_int())
+
+                    graph_file = graph_generator.create_graph()
+                    self.window.console.writeln("Graph generated to file {0}".format(graph_file))
+                    if insert_checkbutton.get_active():
+                        self.project.load_graph_file(graph_file)
+                        project_tab = self.window.get_tab("Project")
+                        project_tab.add_graph(graph_file)
+                except Exception as ex:
+                    self.window.console.writeln(ex.message, "err")
+
+            gen_dialog.destroy()
