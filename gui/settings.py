@@ -1,7 +1,7 @@
 import paths
 import os
 import gtk
-from gui import gladeloader as gl
+import gladeloader as gl
 from misc import utils
 from xml.etree.cElementTree import Element, SubElement, parse
 from pango import FontDescription

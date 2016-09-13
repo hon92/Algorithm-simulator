@@ -1,6 +1,5 @@
 import paths
 import sys
-from gui.graphgenerator import GraphGenerator
 sys.path.append(paths.ROOT)
 import gtk
 import window
@@ -8,10 +7,11 @@ import tab
 import gobject
 import appargs
 import settings
+import gladeloader as gl
 from gui.dialogs import dialog
 from project import Project
 from sim import processfactory as pf
-from gui import gladeloader as gl
+from graphgenerator import GraphGenerator
 
 settings.init()
 gobject.threads_init()

@@ -129,7 +129,7 @@ class SVGVisibleGraphLoader(AbstractGraphLoader):
             model_edges = self.graph_model.get_node(node.get_name()).get_edges()
 
             for model_edge in model_edges:
-                fe = [e for e in edges if e.time == model_edge.get_time() and e.label == model_edge.get_label()]
+                fe = [e for e in edges if e.get_time() == model_edge.get_time() and e.label == model_edge.label]
 
                 if len(fe) > 0:
                     sorted_edges.append(fe[0])

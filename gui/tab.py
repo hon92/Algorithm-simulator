@@ -5,6 +5,7 @@ import plot
 import exportmodule
 import settings
 import simulationcontroller as sc
+import gladeloader as gl
 from misc import timer
 from gui import worker
 from sim import simulation
@@ -14,7 +15,6 @@ from sim import processfactory as pf
 from canvas import Canvas
 from nodeselector import NodeSelector
 from gui import statistics
-from gui import gladeloader as gl
 
 class Tab(gtk.VBox):
     def __init__(self, window, title):
