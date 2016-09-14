@@ -46,12 +46,12 @@ class SimWorker(Worker):
 
     def solve_task(self, task):
         task.connect("end_simulation", self._end)
-        try:
-            task.start()
-        except Exception as ex:
-            exc_type, exc_value, exc_tb = sys.exc_info()
-            err = traceback.format_exception(exc_type, exc_value, exc_tb)
-            self._error(task, "".join(err))
+#        try:
+        task.start()
+        #except Exception as ex:
+            #exc_type, exc_value, exc_tb = sys.exc_info()
+            #err = traceback.format_exception(exc_type, exc_value, exc_tb)
+            #self._error(task, "".join(err))
 
     def _error(self, sim, msg):
         for cb in self.error_callbacks:

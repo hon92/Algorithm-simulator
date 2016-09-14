@@ -401,15 +401,17 @@ class SimulationProgressTab(CloseTab):
         for _ in xrange(sim_count):
             for filename in files:
                 graph = self.used_graphs[filename]
-                simulator = simulation.Simulation(graph)
+                simulator = simulation.Simulation(process_type, process_count, graph)
+                """
                 simulator.register_n_processes(process_type, process_count)
                 for process in simulator.processes:
                     process.connect("log", self.log_message)
                 process_info = "{0} - {1}({2})".format(ntpath.basename(filename),
                                                       process_type,
                                                       process_count)
+                """
                 order += 1
-                self.liststore.append([process_info, 0, self.WAITING, 0.0, filename, order])
+                self.liststore.append(["process_info", 0, self.WAITING, 0.0, filename, order])
                 self.worker.put(simulator)
 
     def run(self):

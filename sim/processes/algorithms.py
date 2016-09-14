@@ -7,8 +7,8 @@ class Algorithm1(process.GraphProcess):
     DESCRIPTION = "If process has more then 1 task to do, he try to send new \
 task to another process which is waiting for work."
 
-    def __init__(self, id, env, graph):
-        process.GraphProcess.__init__(self, id, self.NAME, env, graph)
+    def __init__(self, id, ctx):
+        process.GraphProcess.__init__(self, id, self.NAME, ctx)
         self.storage = storage.QueueStorage()
 
     def initialize(self):
@@ -23,9 +23,9 @@ task to another process which is waiting for work."
                 node = self.storage.get()
                 if self.storage.get_size() > 1:
                     found = False
-                    for p in self.comunicator.get_processes():
+                    for p in self.communicator.get_processes():
                         if p.storage.get_size() == 0:
-                            self.comunicator.send_node(node, p.id)
+                            self.communicator.send_node(node, p.id)
                             found = True
                             break
                     if found:
@@ -71,14 +71,14 @@ send new task."
                         if i == self.id:
                             self.storage.put(new_node)
                         else:
-                            processes = self.comunicator.get_processes()
+                            processes = self.communicator.get_processes()
                             p = processes[i]
-                            self.comunicator.send_node(new_node, p.id)
+                            self.communicator.send_node(new_node, p.id)
             else:
                 yield self.wait()
 
     def partition(self, node):
-        max = len(self.comunicator.get_processes()) - 1
+        max = len(self.communicator.get_processes()) - 1
         if max > 0:
             return r.randint(0, max)
         return 0
@@ -109,7 +109,7 @@ class Algorithm3(process.GraphProcess):
                     if not new_node.is_discovered():
                         next = self.id + 1 % process_count
                         if next != self.id:
-                            self.comunicator.send_node(new_node, next)
+                            self.communicator.send_node(new_node, next)
                             new_node.discover(next)
                         else:
                             new_node.discover(self.id)
@@ -135,14 +135,16 @@ class PingPongExample(process.GraphProcess):
         ping_pong_count = 0
         partner_rank = (world_rank + 1) % 2
         while (ping_pong_count < PING_PONG_LIMIT):
+            print self.communicator.get_waiting_messages_count()
             if (world_rank == ping_pong_count % 2):
                 ping_pong_count += 1
-                yield self.comunicator.send(ping_pong_count, partner_rank)
+                yield self.communicator.send(ping_pong_count, partner_rank)
                 self.log("{0} send incremented value {1} to process {2}".format(world_rank,
                                                                                   ping_pong_count,
                                                                                   partner_rank))
             else:
-                val = yield self.comunicator.receive(partner_rank)
+                val = yield self.communicator.receive(partner_rank)
+                val = val.data
                 ping_pong_count = val
                 self.log("{0} received {1} from process {2}".format(world_rank,
                                                                     ping_pong_count,

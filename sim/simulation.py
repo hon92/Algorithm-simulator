@@ -1,89 +1,128 @@
 import simpy
-import processfactory as pf
-from processes import process
 from gui import events
-from sim.processes.process import WorldComunicator
+from sim.processes.process import ProcessContext, Process
+from sim.processes.monitor import MonitorManager
 
 class AbstractSimulation(events.EventSource):
-    def __init__(self):
+    def __init__(self, process_type, process_count, arguments = None):
         events.EventSource.__init__(self)
-        self.register_event("start_simulation")
-        self.register_event("end_simulation")
+        self.register_event("start")
+        self.register_event("end")
+        self.register_event("stop")
+        self.register_event("interrupt")
         self.running = False
-        self.connect("start_simulation", lambda s: self._set_running(True))
-        self.connect("end_simulation", lambda s: self._set_running(False))
-
-    def _set_running(self, val):
-        self.running = val
-
-    def start(self):
-        self.prepare()
-        self._run()
-
-    def _run(self):
-        pass
-
-    def stop(self):
-        pass
-
-    def prepare(self):
-        pass
+        self.process_type = process_type
+        self.process_count = process_count
+        self.processes_events = []
+        monitor_manager = MonitorManager()
+        self.ctx = ProcessContext(simpy.Environment(),
+                                  monitor_manager,
+                                  arguments)
 
     def is_running(self):
         return self.running
 
-class Simulation(AbstractSimulation):
-    def __init__(self, graph):
-        AbstractSimulation.__init__(self)
-        self.env = simpy.Environment()
-        self.process_factory = pf.DefaultProcess(self.env)
-        self.graph = graph
-        self.processes = []
-        self.process_events = []
+    def _create_procesess(self):
+        processes = self.create_processes()
+        self.ctx.processes = processes
 
-    def register_process(self, process_type):
-        new_process = self.process_factory.create_process(self.graph,
-                                                          process_type)
-        if new_process:
-            self.processes.append(new_process)
-
-    def register_n_processes(self, process_type, count):
-        for i in xrange(count):
-            self.register_process(process_type)
-
-    def get_available_processor_types(self):
-        return pf.get_processes_names()
-
-    def prepare_processes(self):
-        self.process_factory.reset_id()
-        world_com = WorldComunicator(self.processes)
-        for process in self.processes:
-            process.comunicator.set_world_comunicator(world_com)
-            process.initialize()
-            e = self.env.process(process.run())
-            self.process_events.append(e)
-
-    def _run(self):
-        self.fire("start_simulation", self)
-        try:
-            self.sim_status = self.env.run()
-        except simpy.core.StopSimulation:
-            self.sim_status = "Canceled"
-        self.fire("end_simulation", self)
+    def start(self):
+        self._create_procesess()
+        self.running = True
+        self.fire("start", self)
+        self._prepare()
+        self._run()
 
     def stop(self):
         if self.is_running():
-            for e in self.process_events:
+            self.running = False
+            for e in self.processes_events:
                 try:
-                    e.fail(simpy.core.StopSimulation("Sim stopped"))
+                    e.fail(simpy.core.StopSimulation("Simulation was interrupted"))
                 except Exception:
                     pass
-        del self.processes[:]
-        self.env._now = 0
+            self.processes_events = []
+            self.ctx.processes = []
+            self.ctx.env._now = 0
+            self.fire("stop", self)
+
+    def _run(self):
+        self.run()
+        self.running = False
+        self.fire("end", self)
+
+    def _prepare(self):
+        self.processes_events = []
+        for p in self.ctx.processes:
+            p.init()
+            e = self.ctx.env.process(p.run())
+            self.processes_events.append(e)
+        self.prepare()
+
+    def run(self):
+        try:
+            error = self.ctx.env.run()
+        except simpy.core.StopSimulation:
+            if error:
+                self.fire("stop")
+        except Exception as ex:
+            print ex.message
+            self.fire("interrupt", ex.message)
 
     def prepare(self):
-        self.graph.reset()
-        self.prepare_processes()
+        pass
+
+    def create_processes(self):
+        processes = []
+        class Pro(Process):
+            def __init__(self, ctx):
+                Process.__init__(self, 1, "test", ctx)
+            def run(self):
+                while True:
+                    yield self.ctx.env.timeout(1)
+                    self.communicator.send_node("dqd", 1)
+                    print "test"
+                    if self.ctx.env.now > 3:
+                        break
+
+        from processes import algorithms as alg
+        for i in xrange(self.process_count):
+            algor = Pro(self.ctx)
+            processes.append(algor)
+        return processes
+
+
+class Simulation(AbstractSimulation):
+    def __init__(self, process_type, process_count, graph, arguments = None):
+        AbstractSimulation.__init__(self, process_type, process_count, arguments)
+        self.ctx.graph = graph
+        self.graph = graph #REMOVE THIS
+
+    def prepare(self):
+        self.ctx.graph.reset()
+
+    def create_processes(self):
+        processes = []
+        class Pro(Process):
+            def __init__(self, ctx):
+                Process.__init__(self, 0, "test", ctx)
+            def run(self):
+                while True:
+                    yield self.ctx.env.timeout(1)
+                    self.communicator.send_node("dqd", 0)
+                    print "test"
+                    if self.ctx.env.now > 3:
+                        break
+
+        from processes import algorithms as alg
+        for i in xrange(self.process_count):
+            algor = Pro(self.ctx)
+            processes.append(algor)
+        return processes
+
+        from processes import algorithms as al
+        alg = al.Algorithm1(0, self.ctx)
+        return [alg]
 
 class VisualSimulation(Simulation):
     def __init__(self, visible_graph):
@@ -93,7 +132,7 @@ class VisualSimulation(Simulation):
         self.generator = None
         self.visible_count = 0
 
-    def _run(self):
+    def run(self):
         pass
 
     def stop(self):
