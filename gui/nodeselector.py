@@ -1,4 +1,5 @@
 
+
 class NodeSelector():
     def __init__(self, visible_graph):
         self.graph = visible_graph
@@ -16,4 +17,4 @@ class NodeSelector():
             if x >= nx and x <= nx + nw and y >= ny and y <= ny + nh:
                 return node
         return None
-                
+

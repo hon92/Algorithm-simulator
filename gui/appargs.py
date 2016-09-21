@@ -2,6 +2,7 @@ import argparse
 import sys
 from sim import processfactory as pf
 
+
 class AppArgs:
     def __init__(self, app, args):
         self.app = app
@@ -34,6 +35,9 @@ class AppArgs:
                         self.on_arg_error("Selection must be list of integers")
 
                     val -= 1
+                    if len(project_files) == 0:
+                        msg = "Can not use selection when project has no files"
+                        self.on_arg_error(msg.format(len(project_files)))
                     if val < 0 or val >= len(project_files):
                         msg = "Selection must be between 1 to {0}"
                         self.on_arg_error(msg.format(len(project_files)))
@@ -61,13 +65,15 @@ class AppArgs:
                         self.on_arg_error("Simulation count must be between 1 - 100")
                     sim_count = args.count
 
-                t = self.app.project.get_tab()
+                t = self.app.project.get_project_tab()
                 t.run_simulations(files,
-                                  sim_count,
                                   process_type,
-                                  process_count)
+                                  process_count,
+                                  sim_count
+                                  )
 
     def on_arg_error(self, msg):
         sys.stderr.write(msg + "\n")
         self.parser.print_help()
         sys.exit(1)
+

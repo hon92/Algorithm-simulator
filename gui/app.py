@@ -1,5 +1,6 @@
 import paths
 import sys
+from gui.projectloader import ProjectLoader
 sys.path.append(paths.ROOT)
 import gtk
 import window
@@ -9,43 +10,27 @@ import appargs
 import settings
 import gladeloader as gl
 from gui.dialogs import dialog
-from project import Project
 from sim import processfactory as pf
 from graphgenerator import GraphGenerator
 
-settings.init()
 gobject.threads_init()
+settings.init()
 pf.load()
+
 
 class App():
     def __init__(self, args):
         self.project = None
         self.window = window.Window(self)
-        self.window.create_tab(tab.WelcomeTab(self.window, "Welcome tab"))
         self.app_args = appargs.AppArgs(self, args)
         self.app_args.solve()
+        self.window.create_tab(tab.WelcomeTab(self.window, "Welcome tab"))
 
     def run(self):
         self.window.show()
         gtk.threads_enter()
         gtk.main()
         gtk.threads_leave()
-
-    def close(self):
-        if self.project:
-            self.close_project()
-        gtk.main_quit()
-
-    def _open_project(self, project):
-        def on_project_error(msg):
-            self.window.console.writeln(msg, "err")
-
-        project.connect("error", on_project_error)
-        project.open()
-        self.project = project
-        project_tab = tab.ProjectTab(self.window, project)
-        self.window.create_tab(project_tab)
-        project_tab.load()
 
     def create_project(self):
         input_dialog = dialog.InputDialog("Insert project name", self.window)
@@ -56,13 +41,15 @@ class App():
             if project_file:
                 if self.project:
                     self.project.close()
-                project = Project.create_empty_project(project_file)
-                project.set_name(project_name)
-                project.save()
-                self._open_project(project)
-                msg = "Project '{0}' was created at location '{1}'"
-                self.window.console.writeln(msg.format(project.get_name(),
+
+                try:
+                    project = ProjectLoader.create_empty_project(project_file, project_name)
+                    self._open_project(project)
+                    msg = "Project '{0}' was created at location '{1}'"
+                    self.window.console.writeln(msg.format(project.get_name(),
                                                            project.get_file()))
+                except Exception as ex:
+                    self.window.console.writeln(ex.message, "err")
 
     def open_project(self, project_file = None):
         if not project_file:
@@ -73,33 +60,48 @@ class App():
                 self.close_project()
 
             try:
-                project = Project(project_file)
+                def on_project_error(msg):
+                    self.window.console.writeln(msg, "err")
+
                 msg = "Opening project at location '{0}'".format(project_file)
                 self.window.console.writeln(msg)
+                project = ProjectLoader.load_project(project_file, on_project_error)
                 self._open_project(project)
                 msg = "Project '{0}' was opened".format(project.get_name())
                 self.window.console.writeln(msg)
             except Exception as ex:
-                self.window.console.writeln(ex.message, "err")
+                self.window.console.writeln("Project is corrupted ({0})".format(ex.message), "err")
+
+    def _open_project(self, project):
+        self.project = project
+        self.project.saved = True
+        project_tab = tab.ProjectTab(self.window, project)
+        simulations_tab = tab.SimulationsTab(self.window, project)
+        self.window.create_tab(project_tab)
+        self.window.create_tab(simulations_tab)
+
+    def save_project(self):
+        if self.project:
+            try:
+                ProjectLoader.save_project(self.project)
+                self.project.saved = True
+                msg = "Project '{0}' was saved".format(self.project.get_name())
+                self.window.console.writeln(msg)
+            except Exception as ex:
+                msg = "Project '{0}' was not saved due to error({1})"
+                self.window.console.writeln(msg.format(self.project.get_name(),
+                                                       ex.message), "err")
 
     def close_project(self):
         if self.project:
+            if not self.project.is_saved():
+                print "you should save your project before closing"
             name = self.project.get_name()
             self.project.close()
             self.window.set_title("")
             self.project = None
             msg = "Project '{0}' was closed".format(name)
             self.window.console.writeln(msg)
-
-    def save_project(self):
-        if self.project:
-            saved = self.project.save()
-            if saved:
-                msg = "Project '{0}' was saved".format(self.project.get_name())
-                self.window.console.writeln(msg)
-            else:
-                msg = "Project '{0}' was not saved due to error"
-                self.window.console.writeln(msg.format(self.project.get_name()), "err")
 
     def open_settings(self):
         settings_tab = self.window.get_tab("Settings")
@@ -111,11 +113,11 @@ class App():
 
     def start_simulation(self):
         if self.project:
-            self.project.get_tab().run_simulations()
+            self.project.get_project_tab().run_simulations()
 
     def start_graphics_simulation(self):
         if self.project:
-            self.project.get_tab().run_vizual_simulations()
+            self.project.get_project_tab().run_vizual_simulations()
 
     def generate_graph(self):
         if self.project:
@@ -158,3 +160,9 @@ class App():
                     self.window.console.writeln(ex.message, "err")
 
             gen_dialog.destroy()
+
+    def close(self):
+        if self.project:
+            self.close_project()
+        gtk.main_quit()
+

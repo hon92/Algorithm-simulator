@@ -1,137 +1,94 @@
-from misc import utils
+
+
 
 class Graph():
     def __init__(self):
-        self.nodes = {} # key -> node.id, value -> node
+        self.nodes = {} # key -> node id, value -> node
         self.root = None
-        self.edges_count = None
-        self.discovered_nodes_count = 0
 
-    def set_root_node(self, name):
-        if name in self.nodes:
-            self.root = self.nodes[name]
+    def set_root_node(self, id):
+        if id in self.nodes:
+            self.root = self.nodes[id]
         else:
-            raise Exception("Invalid root node")
+            raise Exception("Invalid root node id")
 
     def get_root(self):
         return self.root
 
     def add_node(self, node):
-        if node.name not in self.nodes:
-            self.nodes[node.name] = node
+        if node.id not in self.nodes:
+            self.nodes[node.id] = node
+        else:
+            raise Exception("Node id already exists in graph")
 
-    def get_node(self, name):
-        if name in self.nodes:
-            return self.nodes[name]
+    def get_node(self, id):
+        if id in self.nodes:
+            return self.nodes[id]
         return None
 
-    def add_edge(self, node_name, edge):
-        if node_name in self.nodes:
-            self.nodes[node_name].add_edge(edge)
+    def add_edge(self, edge):
+        if edge.source.id in self.nodes:
+            self.nodes[edge.source.id].add_edge(edge)
+        else:
+            raise Exception("Source node of edge not exists in graph")
 
-    def get_edge(self, source_node, destination_node):
-        if source_node in self.nodes and destination_node in self.nodes:
-            for edge in self.nodes[source_node].get_edges():
-                if edge.get_destination().name == destination_node:
+    def get_edge(self, source_node_id, target_node_id):
+        if source_node_id in self.nodes and target_node_id in self.nodes:
+            source_node_edges = self.nodes[source_node_id].get_edges()
+
+            for edge in source_node_edges:
+                if edge.get_target().id == target_node_id:
                     return edge
         return None
-
-    def reset(self):
-        self.discovered_nodes_count = 0
-        for _, node in self.nodes.iteritems():
-            node.discover(-1)
-            for edge in node.get_edges():
-                edge.discover(-1)
-                edge.complete(-1)
 
     def get_nodes_count(self):
         return len(self.nodes)
 
     def get_edges_count(self):
-        if self.edges_count is not None:
-            return self.edges_count
-        edges = 0
+        edges_count = 0
         for _, node in self.nodes.iteritems():
-            edges += len(node.get_edges())
-        self.edges_count = edges
-        return edges
+            edges_count += len(node.get_edges())
+        return edges_count
 
-    def get_discovered_nodes_count(self):
-        return self.discovered_nodes_count
 
 class Node():
-    def __init__(self, name, size):
-        self.name = name
+    def __init__(self, id, size):
+        self.id = id
         self.edges = None
         self.size = size
-        self.discovered_by = -1
 
     def get_edges(self):
         if not self.edges:
-            return []
+            self.edges = []
         return self.edges
 
     def add_edge(self, edge):
-        if not self.edges:
-            self.edges = []
-        self.edges.append(edge)
+        self.get_edges().append(edge)
 
     def get_size(self):
         return self.size
 
-    def get_name(self):
-        return self.name
+    def get_id(self):
+        return self.id
 
-    def discover(self, by):
-        self.discovered_by = by
-        if by != -1:
-            self.graph.discovered_nodes_count += 1
-
-    def get_discoverer(self):
-        return self.discovered_by
-
-    def is_discovered(self):
-        return self.discovered_by != -1
-
-    def is_completed(self):
-        for e in self.get_edges():
-            if not e.is_completed():
-                return False
-        return True
 
 class Edge():
-    def __init__(self, destination, time, events_count, pids, label):
-        self.destination = destination
+    def __init__(self, source, target, time, events_count, pids, label):
+        self.source = source
+        self.target = target
         self.time = time
         self.events_count = events_count
         self.pids = pids
         self.label = label
-        self.discovered_by = -1
-        self.completed_by = -1
 
-    def get_destination(self):
-        return self.destination
+    def get_source(self):
+        return self.source
+
+    def get_target(self):
+        return self.target
 
     def get_time(self):
         return self.time
-
-    def is_discovered(self):
-        return self.discovered_by != -1
-
-    def get_discoverer(self):
-        return self.discovered_by
-
-    def is_completed(self):
-        return self.completed_by != -1
-
-    def get_complete(self):
-        return self.completed_by
-
-    def discover(self, by):
-        self.discovered_by = by
-
-    def complete(self, by):
-        self.completed_by = by
 
     def get_label(self):
         return self.label
@@ -149,55 +106,22 @@ class VisibleGraph(Graph):
         self.scale = scale
         self.width = width
         self.height = height
-        self.node_colors = [(155, 155, 155)]
 
-    def draw(self, canvas):
+    def draw(self, canvas, vis_graph_stats):
         for _, node in self.nodes.iteritems():
-            node.draw(canvas)
+            node.draw(canvas, vis_graph_stats)
 
-    def reset(self):
-        self.discovered_nodes_count = 0
-        for _, node in self.nodes.iteritems():
-            node.discover(-1)
-            for edge in node.get_edges():
-                edge.discover(-1)
-                edge.complete(-1)
-            node.set_visible(False)
-        self.get_root().set_visible(True)
-
-    def set_colors(self, colors):
-        del self.node_colors[1:]
-        for c in colors:
-            self.node_colors.append(c)
 
 class VisibleNode(Node):
-    def __init__(self, name, complexity, x, y, width, height):
-        Node.__init__(self, name, complexity)
+    def __init__(self, id, size, x, y, width, height):
+        Node.__init__(self, id, size)
         self.x = x
         self.y = y
         self.width = width
         self.height = height
-        self.visible = False
-        self.is_selected = False
 
-    def is_visible(self):
-        return self.visible
-
-    def set_visible(self, value):
-        self.visible = value
-
-    def discover(self, by):
-        Node.discover(self, by)
-        if by != -1:
-            self.set_visible(True)
-
-    def draw(self, canvas):
-        color = self.graph.node_colors[0]
-
-        if self.is_visible():
-            if self.discovered_by != -1:
-                color = self.graph.node_colors[self.discovered_by + 1]
-
+    def draw(self, canvas, vis_graph_stats):
+        color = vis_graph_stats.get_node_color(self.id)
         canvas.set_color(*color)
         canvas.draw_rectangle(self.x,
                               self.y,
@@ -205,61 +129,55 @@ class VisibleNode(Node):
                               self.height,
                               True)
 
-        name_color = utils.get_inverted_color(color)
-        canvas.set_color(*name_color)
+        inv_color = vis_graph_stats.get_inverted_color(color)
+        canvas.set_color(*inv_color)
         canvas.draw_centered_text(self.x + self.width / 2,
-                         self.y + self.height / 2,
-                         "name:{0}".format(self.name, self.get_size()))
+                                  self.y + self.height / 2,
+                                  "id:{0}".format(self.id, self.get_size()))
 
-        if self.is_selected:
-            canvas.set_color(*name_color)
+        if vis_graph_stats.is_selected_node(self.id):
             canvas.draw_rectangle(self.x - 1,
                                   self.y - 1,
                                   self.width + 1,
                                   self.height + 1)
-
         for e in self.get_edges():
-            if e.get_destination().is_visible():
-                e.set_visible(self.is_visible())
-            e.draw(canvas)
+            if vis_graph_stats.is_node_visible(e.get_target().get_id()):
+                vis_graph_stats.set_edge_visibility(e.source.id,
+                                                    e.target.id,
+                                                    e.label, vis_graph_stats.is_node_visible(self.id))
+            e.draw(canvas, vis_graph_stats)
+
 
 class VisibleEdge(Edge):
-    def __init__(self, destination, complexity, events_count, pids, label, lx, ly, points, arrow_polygon):
-        Edge.__init__(self, destination, complexity, events_count, pids, label)
-        self.label_x = lx
-        self.label_y = ly
+    def __init__(self, source, target, time, events_count, pids, label,
+                 lx, ly, points, arrow_polygon):
+        Edge.__init__(self, source, target, time, events_count, pids, label)
+        self.lx = lx
+        self.ly = ly
         self.label = label
         self.points = points
         self.arrow_polygon = arrow_polygon
-        self.visible = False
 
-    def set_visible(self, value):
-        self.visible = value
+    def draw(self, canvas, vis_graph_stats):
+        edge_id = (self.source.id, self.target.id, self.label)
+        edge_color = vis_graph_stats.get_edge_color(*edge_id)
+        arrow_color = vis_graph_stats.get_edge_arrow_color()
+        is_discovered = vis_graph_stats.is_edge_discovered(*edge_id)
+        is_completed = vis_graph_stats.is_edge_completed(*edge_id)
+        dashed =  is_discovered and not is_completed
+        discoverer = vis_graph_stats.get_edge_discoverer(*edge_id)
+        completer = vis_graph_stats.get_edge_completer(*edge_id)
 
-    def draw(self, canvas):
-        completed_by = self.get_complete()
-        discovered_by = self.get_discoverer()
-        arrow_color = (255, 255, 255)
-        edge_color = self.destination.graph.node_colors[0]
-        dashed = False
+        if not discoverer:
+            discoverer = -1
+        if not completer:
+            completer = -1
 
-        if self.visible:
-            edge_color = self.destination.graph.node_colors[self.destination.discovered_by + 1]
-
-        if self.discovered_by != -1:
-            edge_color = self.destination.graph.node_colors[self.discovered_by + 1]
-            dashed = True
-
-        if self.completed_by != -1:
-            edge_color = self.destination.graph.node_colors[self.completed_by + 1]
-            dashed = False
-
-        label = "({0})->({1})".format(discovered_by, completed_by)
+        label = "({0})->({1})".format(discoverer, completer)
         canvas.set_color(*edge_color)
-        canvas.draw_text(self.label_x, self.label_y, label)
+        canvas.draw_text(self.lx, self.ly, label)
         canvas.set_color(*arrow_color)
         canvas.draw_polygon(self.arrow_polygon, True)
         canvas.set_color(*edge_color)
         canvas.draw_path(self.points, dashed)
-
 

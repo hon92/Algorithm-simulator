@@ -21,6 +21,7 @@ def switch_button(b, label, tooltip, icon_name):
     l.set_text(label)
     b.set_tooltip_text(tooltip)
 
+
 class SimulationState():
     def __init__(self, controller):
         self.controller = controller
@@ -33,6 +34,7 @@ class SimulationState():
 
     def step(self):
         pass
+
 
 class RunningState(SimulationState):
     def __init__(self, controller):
@@ -57,6 +59,7 @@ class RunningState(SimulationState):
     def get_state_name(self):
         return "Running"
 
+
 class PausedState(SimulationState):
     def __init__(self, controller):
         SimulationState.__init__(self, controller)
@@ -78,6 +81,7 @@ class PausedState(SimulationState):
     def get_state_name(self):
         return "Paused"
 
+
 class IdleState(SimulationState):
     def __init__(self, controller):
         SimulationState.__init__(self, controller)
@@ -93,21 +97,26 @@ class IdleState(SimulationState):
     def get_state_name(self):
         return "Idle"
 
+
 class SimulationController():
-    def __init__(self, sim_tab, toolbar):
-        self.simulator = sim_tab.simulator
-        self.sim_tab = sim_tab
+    def __init__(self, tab, toolbar):
+        self.simulation = tab.simulation
+        self.tab = tab
         self.toolbar = toolbar
         self.buttons = self.create_buttons()
         self.step_count = 0
         self.time = 0
-        self.timer = timer.Timer(settings.get("VIZ_SIMULATION_TIMER"), self.step)
+        self.timer = timer.Timer(1000, self.step)#settings.get("VIZ_SIMULATION_TIMER"), self.step)
         self.state = None
         self.set_state(IdleState(self))
+        self.simulation.connect("start", self.on_simulation_start)
+        self.simulation.connect("stop", self.on_simulation_stop)
+        self.simulation.connect("end", self.on_simulation_end)
+        self.simulation.connect("interrupt", self.on_simulation_error)
 
     def set_state(self, state):
         self.state = state
-        self.sim_tab.statusbar.push(self.sim_tab.status_ctx,
+        self.tab.statusbar.push(self.tab.status_ctx,
                                     "State: " + state.get_state_name())
 
     def create_buttons(self):
@@ -136,25 +145,41 @@ class SimulationController():
         self.toolbar.append_space()
 
         buttons["zoomin"] = create_toolbutton(*buttons_conf["zoomin"],
-                                           callback = lambda e: self.sim_tab.zoom(1))
+                                           callback = lambda e: self.tab.zoom(1))
 
         buttons["zoomout"] = create_toolbutton(*buttons_conf["zoomout"],
-                                           callback = lambda e: self.sim_tab.zoom(-1))
+                                           callback = lambda e: self.tab.zoom(-1))
         return buttons
 
     def update_timers(self):
         self.step_count += 1
-        diff = self.simulator.env.now - self.time
-        self.time = self.simulator.env.now
-        self.sim_tab.sim_stats.update_prop("sim_time", self.simulator.env.now)
-        self.sim_tab.sim_stats.update_prop("Step", self.step_count)
-        self.sim_tab.sim_stats.update_prop("Last step time", diff)
-        self.sim_tab.sim_stats.update_undiscovered(self.simulator.graph)
-        self.sim_tab.sim_stats.update_processes(self.simulator.processes)
-        self.sim_tab.anim_plot.update()
+        now = self.simulation.ctx.env.now
+        diff = now - self.time
+        self.time = now
+        self.tab.sim_stats.update_prop("sim_time", now)
+        self.tab.sim_stats.update_prop("Step", self.step_count)
+        self.tab.sim_stats.update_prop("Last step time", diff)
+        #self.tab.sim_stats.update_undiscovered(self.simulator.graph)
+        #self.tab.sim_stats.update_processes(self.simulator.processes)
+        self.tab.anim_plot.update()
 
+    def on_simulation_start(self, simulation):
+        self.tab.sim_stats.init_properties()
+        self.set_state(RunningState(self))
+
+    def on_simulation_end(self, simulation):
+        self.set_state(IdleState(self))
+
+    def on_simulation_stop(self, simulation):
+        self.set_state(IdleState(self))
+
+    def on_simulation_error(self, error_message):
+        self.set_state(IdleState(self))
+
+
+    """
     def request_sim_dialog(self):
-        sim_dialog = SimulationDialog(self.sim_tab.win,
+        sim_dialog = SimulationDialog(self.tab.win,
                                       self.simulator.get_available_processor_types())
         result = sim_dialog.run()
         if result != gtk.RESPONSE_OK:
@@ -164,51 +189,66 @@ class SimulationController():
         process_type = sim_dialog.get_process_type()
         sim_dialog.destroy()
         return process_count, process_type
+    """
 
-    def set_graph_colors(self):
-        cc = color_palette.new_color_cycler()
-        colors = []
-        for _ in xrange(len(self.simulator.processes)):
-            colors.append(utils.hex_to_rgb(next(cc)))
-        self.sim_tab.graph.set_colors(colors)
+#     def set_graph_colors(self):
+#         cc = color_palette.new_color_cycler()
+#         colors = []
+#         for _ in xrange(len(self.simulator.processes)):
+#             colors.append(utils.hex_to_rgb(next(cc)))
+#         self.tab.graph.set_colors(colors)
 
-    def _log_message(self, msg, tag):
-        self.sim_tab.win.console.writeln(msg, tag)
+#     def _log_message(self, msg, tag):
+#         self.tab.win.console.writeln(msg, tag)
 
-    def prepare_new_run(self, process_count, process_type):
-        self.simulator.stop()
-        self.simulator.register_n_processes(process_type, process_count)
-        for process in self.simulator.processes:
-            process.connect("log", self._log_message)
+#     def prepare_new_run(self, process_count, process_type):
+#         self.simulator.stop()
+#         self.simulator.register_n_processes(process_type, process_count)
+#         for process in self.simulator.processes:
+#             process.connect("log", self._log_message)
 
-    def run(self, sim_properties = None):
-        if not self.simulator.is_running():
-            if not sim_properties:
-                result = self.request_sim_dialog()
-                if result:
-                    self.prepare_new_run(result[0], result[1])
-                else:
-                    return False
-            else:
-                self.prepare_new_run(sim_properties["process_count"],
-                                     sim_properties["process_type"])
-            self.step_count = 0
-            self.set_graph_colors()
-            self.simulator.start()
-            self.sim_tab.sim_stats.new_simulation(self.simulator)
-            self.sim_tab.clear_plots()
-            self.sim_tab.anim_plot.set_processes(self.simulator.processes)
-            self.sim_tab.anim_plot.start()
-            self.update_timers()
-            self.timer.start()
-            self.set_state(RunningState(self))
-            return True
-        return False
+    
+    def run(self):
+        if self.simulation.is_running():
+            return
+
+        self.simulation.run()
+        self.tab.clear_plots()
+        #self.tab.anim_plot.set_processes(self.simulation.ctx.processes)
+        #self.tab.anim_plot.start()
+        #self.update_timers()
+        self.timer.start()
+        
+
+
+#     def run(self, sim_properties = None):
+#         if not self.simulator.is_running():
+#             if not sim_properties:
+#                 result = self.request_sim_dialog()
+#                 if result:
+#                     self.prepare_new_run(result[0], result[1])
+#                 else:
+#                     return False
+#             else:
+#                 self.prepare_new_run(sim_properties["process_count"],
+#                                      sim_properties["process_type"])
+#             self.step_count = 0
+#             self.set_graph_colors()
+#             self.simulator.start()
+#             self.tab.sim_stats.new_simulation(self.simulator)
+#             self.tab.clear_plots()
+#             self.tab.anim_plot.set_processes(self.simulator.processes)
+#             self.tab.anim_plot.start()
+#             self.update_timers()
+#             self.timer.start()
+#             self.set_state(RunningState(self))
+#             return True+
+#         return False
 
     def step(self):
-        if self.simulator.is_running():
+        if True:#self.simulation.is_running():
             self._step()
-            self.sim_tab.redraw()
+            self.tab.redraw()
             self.update_timers()
             return True
         else:
@@ -216,25 +256,24 @@ class SimulationController():
             return False
 
     def _step(self):
-        val = self.simulator.visible_step()
+        val = self.simulation.visible_step()
         if not val:
-            self.simulator.running = False
+            self.simulation.running = False
 
     def stop(self):
         self.timer.stop()
-        self.simulator.stop()
+        self.simulation.stop()
 
     def pause(self):
         if self.timer.is_running():
             self.timer.stop()
         else:
-            if self.simulator.is_running():
-                self.timer = timer.Timer(settings.VIZ_SIMULATION_TIMER, self.step)
+            if self.simulation.is_running():
+                self.timer = timer.Timer(settings.get("VIZ_SIMULATION_TIMER"), self.step)
                 self.timer.start()
 
     def restart(self):
         self.stop()
-        self.simulator.graph.reset()
-        self.sim_tab.clear_plots()
-        self.sim_tab.redraw()
+        self.tab.clear_plots()
+        self.tab.redraw()
 

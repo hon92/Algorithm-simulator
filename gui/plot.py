@@ -2,6 +2,7 @@ import gtk
 import numpy as np
 import matplotlib as mpl
 import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
 from matplotlib import style
 style.use("fivethirtyeight")
 from matplotlib.backends.backend_gtkagg import FigureCanvasGTKAgg as FigureCanvas
@@ -23,6 +24,7 @@ def set_ax_color(ax):
         ax.set_prop_cycle(cycler("color", color_pallete.colors))
     else:
         ax.set_color_cycle(color_pallete.colors)
+
 
 class AbstractPlot():
     def __init__(self, figure):
@@ -68,6 +70,7 @@ class AbstractPlot():
             self.draw_plot()
             self.post_process()
             self.displayed = True
+            self.disposed = False
 
     def redraw(self):
         self.get_figure().canvas.draw_idle()
@@ -76,9 +79,11 @@ class AbstractPlot():
         if not self.disposed:
             plt.close(self.figure)
             self.disposed = True
+            self.displayed = False
 
     def on_pick(self, e):
         pass
+
 
 class AbstactSimplePlot(AbstractPlot):
     def __init__(self, figure, title, xlabel, ylabel):
@@ -138,7 +143,7 @@ class AbstactSimplePlot(AbstractPlot):
                 else:
                     plot_line.set_marker("o")
 
-        self.get_figure().canvas.draw_idle()
+        self.redraw()
 
     def map_leg_lines_to_axis(self, ax):
         leg = ax.get_legend()
@@ -156,23 +161,6 @@ class AbstactSimplePlot(AbstractPlot):
         for leg_line, ax_line in zip(leg.get_lines(), axis_lines):
             leg_line.set_picker(5)
             self.lines_map[leg_line] = ax_line
-
-class SimplePlot(AbstactSimplePlot):
-    def __init__(self, title, xlabel, ylabel):
-        AbstactSimplePlot.__init__(self, plt.figure(), title, xlabel, ylabel)
-
-class SubPlot(AbstactSimplePlot):
-    def __init__(self, figure, title, xlabel, ylabel, i, w, h):
-        AbstactSimplePlot.__init__(self, figure, title, xlabel, ylabel)
-        self.i = i
-        self.w = w
-        self.h = h
-
-    def create_axis(self):
-        return self.figure.add_subplot(self.h, self.w, self.i)
-
-    def get_index(self):
-        return self.i
 
 
 class AbstractMultiPlot(AbstractPlot):
@@ -213,15 +201,37 @@ class AbstractMultiPlot(AbstractPlot):
                 ax.cla()
             AbstractPlot.dispose(self)
 
+
+class SimplePlot(AbstactSimplePlot):
+    def __init__(self, title, xlabel, ylabel):
+        AbstactSimplePlot.__init__(self, plt.figure(1), title, xlabel, ylabel)
+
+
+class SubPlot(AbstactSimplePlot):
+    def __init__(self, figure, title, xlabel, ylabel, i, w, h):
+        AbstactSimplePlot.__init__(self, figure, title, xlabel, ylabel)
+        self.i = i
+        self.w = w
+        self.h = h
+
+    def create_axis(self):
+        return self.figure.add_subplot(self.h, self.w, self.i)
+
+    def get_index(self):
+        return self.i
+
+
 class MemoryUsagePlot(SimplePlot):
-    def __init__(self, simulator):
+    def __init__(self, simulation):
         SimplePlot.__init__(self, "Memory usage", "time", "storage size")
-        self.simulator = simulator
+        self.simulation = simulation
 
     def draw_plot(self):
         entry_name = "memory_usage_time"
-        for process in self.simulator.processes: 
-            mem_mon = process.get_monitor_manager().get_monitor("MemoryMonitor")
+        processes = self.simulation.ctx.processes
+        for process in processes:
+            mm = process.ctx.monitor_manager
+            mem_mon = mm.get_process_monitor(process.id, "MemoryMonitor")
             data = mem_mon.collect([entry_name])
             xdata = []
             ydata = []
@@ -230,16 +240,18 @@ class MemoryUsagePlot(SimplePlot):
                 ydata.append(d[1])
             self.axis.plot(xdata, ydata, marker = "o", label = "p {0}".format(process.id))
 
+
 class CalculatedBarPlot(SimplePlot):
-    def __init__(self, simulator):
+    def __init__(self, simulation):
         SimplePlot.__init__(self, "Processes times", "", "time")
-        self.simulator = simulator
+        self.simulation = simulation
 
     def draw_plot(self):
         set_ax_color(self.axis)
         cc = color_pallete.new_color_cycler()
+        processes = self.simulation.ctx.processes
         colors = []
-        for _ in xrange(len(self.simulator.processes)):
+        for _ in xrange(len(processes)):
             colors.append(next(cc))
 
         def autolabel(rects):
@@ -249,15 +261,14 @@ class CalculatedBarPlot(SimplePlot):
                             "{0}".format(height),
                             ha='center', va='bottom')
 
-        ind = np.arange(len(self.simulator.processes))
+        ind = np.arange(len(processes))
         width = 0.3
         time_values = []
         wait_values = []
         labels = []
-        for process in self.simulator.processes:
-            sim_time = process.env.now
+        for process in processes:
             time = process.clock.get_time()
-            waiting_time = sim_time - time
+            waiting_time = process.clock.get_waiting_time()
             time_values.append(time)
             wait_values.append(waiting_time)
             labels.append("P{0}".format(process.id))
@@ -268,6 +279,54 @@ class CalculatedBarPlot(SimplePlot):
         autolabel(rects1)
         self.axis.set_xticks(ind + width)
         self.axis.set_xticklabels(labels)
+
+
+class ProcessesLifePlot(SimplePlot):
+    def __init__(self, processes):
+        SimplePlot.__init__(self, "Life of processes", "time", "processes")
+        self.processes = processes
+
+    def draw_plot(self):
+        height = 2
+        yspace = 2
+
+        yticks = []
+
+        for i, process in enumerate(self.processes):
+            sim_time = process.ctx.env.now
+            self.axis.set_xlim(0, sim_time)
+            y = (i + 1) * height
+            yticks.append(y + i*yspace + height / 2)
+            self.axis.broken_barh([(0, sim_time)], (y + i*yspace, height), color = "g")
+            mm = process.ctx.monitor_manager
+            p_monitor = mm.get_process_monitor(process.id, "ProcessMonitor")
+            data = []
+            m_data = p_monitor.collect(["wait", "notify"])
+            wait_data = m_data["wait"]
+            notify_data = m_data["notify"]
+            s = 0
+            width = 0
+            for wtime, in wait_data:
+                s = wtime
+                found_notify_evt = False
+                for n_time, in notify_data:
+                    if n_time > s:
+                        width = n_time - s
+                        found_notify_evt = True
+                        break
+
+                if not found_notify_evt:
+                    width = sim_time - s
+                data.append((s, width))
+            self.axis.broken_barh(data, (y + i*yspace, height), color = "r")
+
+        self.axis.set_yticks(yticks)
+        self.axis.set_yticklabels(["Process {0}".format(p.id) for p in self.processes])
+
+        red_patch = mpatches.Patch(color='red', label='waiting')
+        green_patch = mpatches.Patch(color='green', label='working')
+        self.axis.legend(handles=[red_patch, green_patch], loc = "best")
+
 
 class ProcessPlot(AbstractMultiPlot):
     def __init__(self, process):
@@ -284,9 +343,9 @@ class ProcessPlot(AbstractMultiPlot):
             ax.tick_params(labelsize=10)
 
     def draw_plot(self):
-        mm= self.process.get_monitor_manager()
-        mem_monitor = mm.get_monitor("MemoryMonitor")
-        edge_monitor = mm.get_monitor("EdgeMonitor")
+        mm = self.process.ctx.monitor_manager
+        mem_monitor = mm.get_process_monitor(self.process.id, "MemoryMonitor")
+        edge_monitor = mm.get_process_monitor(self.process.id, "EdgeMonitor")
         data = mem_monitor.collect(["push_time",
                                     "pop_time",
                                     "memory_usage_time"])
@@ -297,7 +356,7 @@ class ProcessPlot(AbstractMultiPlot):
 
         xdata = []
         ydata = []
-        for time, size in push_data:
+        for _, time, size in push_data:
             xdata.append(time)
             ydata.append(size)
 
@@ -305,7 +364,7 @@ class ProcessPlot(AbstractMultiPlot):
 
         xdata = []
         ydata = []
-        for time, size in pop_data:
+        for _, time, size in pop_data:
             xdata.append(time)
             ydata.append(size)
 
@@ -324,13 +383,12 @@ class ProcessPlot(AbstractMultiPlot):
                                      "edge_calculated"])
 
         disc_data = data["edge_discovered"]
-        com_data = data["edge_completed"]
         calc_data = data["edge_calculated"]
 
         width = 0.1
         xdata = []
         ydata = []
-        for _, time, _, edge_time in calc_data:
+        for time, _, edge_time, _, _, _ in calc_data:
             xdata.append(time)
             ydata.append(edge_time)
 
@@ -338,21 +396,16 @@ class ProcessPlot(AbstractMultiPlot):
 
         xdata = []
         ydata = np.arange(len(disc_data))
-        for _, time, _ in disc_data:
+        for time, _, _, _, _, _ in disc_data:
             xdata.append(time)
 
         self.get_axis(3).plot(xdata, ydata, marker = "o", label = "Discovered nodes")
 
-        xdata = []
-        ydata = np.arange(len(com_data))
-        for _, time, _ in com_data:
-            xdata.append(time)
-
-        self.get_axis(3).plot(xdata, ydata, marker = "o", label = "Completed nodes")
         AbstractMultiPlot.draw_plot(self)
 
     def get_title(self):
         return "Process id - {0}".format(self.process.id)
+
 
 class VizualSimPlot(AbstractMultiPlot):
     def __init__(self):
@@ -367,6 +420,7 @@ class VizualSimPlot(AbstractMultiPlot):
         AbstractMultiPlot.pre_process(self)
         for ax in self.figure.axes:
             ax.tick_params(labelsize=8)
+
 
 class AnimPlot():
     def __init__(self, plot):
@@ -406,6 +460,7 @@ class AnimPlot():
 
     def dispose(self):
         self.plot.dispose()
+
 
 class VizualSimPlotAnim(AnimPlot):
     def __init__(self):
@@ -562,3 +617,4 @@ class VizualSimPlotAnim(AnimPlot):
 
             line += 1
         return lines
+

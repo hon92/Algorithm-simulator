@@ -14,10 +14,10 @@ class DotGraphBuilder():
         return "node[shape=\"box\"];\n"
 
     def _edge(self, from_node, edge):
-        return from_node + " -> " + edge.get_destination().name + " [label=\"" + str(edge.label) + "\"];\n" 
+        return from_node + " -> " + edge.get_target().id + " [label=\"" + str(edge.label) + "\"];\n" 
 
     def _node(self, node):
-        return node.name + ";\n"
+        return node.id + ";\n"
 
     def build(self):
         data = []
@@ -28,7 +28,7 @@ class DotGraphBuilder():
         for node in self.graph.nodes.values():
             data.append(self._node(node))
             for e in node.get_edges():
-                temp.append(self._edge(node.name, e))
+                temp.append(self._edge(node.id, e))
 
         data.extend(temp)
         data.append(self._end())

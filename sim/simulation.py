@@ -1,7 +1,9 @@
 import simpy
 from gui import events
-from sim.processes.process import ProcessContext, Process
+from sim.processes.process import ProcessContext
 from sim.processes.monitor import MonitorManager
+from gui.graphstats import GraphStats, VisualGraphStats
+
 
 class AbstractSimulation(events.EventSource):
     def __init__(self, process_type, process_count, arguments = None):
@@ -19,8 +21,19 @@ class AbstractSimulation(events.EventSource):
                                   monitor_manager,
                                   arguments)
 
+        monitor_manager.add_callback("start", self)
+        monitor_manager.add_callback("end", self)
+        monitor_manager.add_callback("stop", self)
+        monitor_manager.add_callback("interrupt", self)
+
     def is_running(self):
         return self.running
+
+    def get_process_count(self):
+        return self.process_count
+
+    def get_process_type(self):
+        return self.process_type
 
     def _create_procesess(self):
         processes = self.create_processes()
@@ -38,114 +51,88 @@ class AbstractSimulation(events.EventSource):
             self.running = False
             for e in self.processes_events:
                 try:
-                    e.fail(simpy.core.StopSimulation("Simulation was interrupted"))
+                    e.fail(simpy.core.StopSimulation("Canceled"))
                 except Exception:
                     pass
             self.processes_events = []
             self.ctx.processes = []
             self.ctx.env._now = 0
-            self.fire("stop", self)
 
     def _run(self):
-        self.run()
+        success = self.run()
         self.running = False
-        self.fire("end", self)
+        if success:
+            self.fire("end", self)
 
     def _prepare(self):
+        self.prepare()
         self.processes_events = []
         for p in self.ctx.processes:
+            p.init_monitor()
             p.init()
             e = self.ctx.env.process(p.run())
             self.processes_events.append(e)
-        self.prepare()
 
     def run(self):
         try:
             error = self.ctx.env.run()
-        except simpy.core.StopSimulation:
             if error:
-                self.fire("stop")
+                self.fire("stop", error)
+                return False
+            return True
+        except simpy.core.StopSimulation:
+            self.fire("stop", error)
+            return False
         except Exception as ex:
-            print ex.message
             self.fire("interrupt", ex.message)
+            return False
 
     def prepare(self):
         pass
 
     def create_processes(self):
-        processes = []
-        class Pro(Process):
-            def __init__(self, ctx):
-                Process.__init__(self, 1, "test", ctx)
-            def run(self):
-                while True:
-                    yield self.ctx.env.timeout(1)
-                    self.communicator.send_node("dqd", 1)
-                    print "test"
-                    if self.ctx.env.now > 3:
-                        break
-
-        from processes import algorithms as alg
-        for i in xrange(self.process_count):
-            algor = Pro(self.ctx)
-            processes.append(algor)
-        return processes
+        return []
 
 
 class Simulation(AbstractSimulation):
     def __init__(self, process_type, process_count, graph, arguments = None):
         AbstractSimulation.__init__(self, process_type, process_count, arguments)
         self.ctx.graph = graph
-        self.graph = graph #REMOVE THIS
+        self.ctx.graph_stats = GraphStats(graph)
 
     def prepare(self):
-        self.ctx.graph.reset()
+        self.ctx.graph_stats.reset()
 
     def create_processes(self):
-        processes = []
-        class Pro(Process):
-            def __init__(self, ctx):
-                Process.__init__(self, 0, "test", ctx)
-            def run(self):
-                while True:
-                    yield self.ctx.env.timeout(1)
-                    self.communicator.send_node("dqd", 0)
-                    print "test"
-                    if self.ctx.env.now > 3:
-                        break
-
-        from processes import algorithms as alg
-        for i in xrange(self.process_count):
-            algor = Pro(self.ctx)
-            processes.append(algor)
-        return processes
-
         from processes import algorithms as al
-        alg = al.Algorithm1(0, self.ctx)
-        return [alg]
+        from processes import monitor
+        procesess = []
+        for i in xrange(self.get_process_count()):
+            process = al.Algorithm1(i, self.ctx)
+            id = process.id
+            mm = self.ctx.monitor_manager
+            mm.register_process_monitor(id, monitor.MemoryMonitor(process.storage,
+                                                                  process.clock))
+            mm.register_process_monitor(id, monitor.TimeMonitor(process.clock))
+            mm.register_process_monitor(id, monitor.ProcessMonitor(process))
+            mm.register_process_monitor(id, monitor.EdgeMonitor(process))
+            procesess.append(process)
+        return procesess
+
 
 class VisualSimulation(Simulation):
-    def __init__(self, visible_graph):
-        Simulation.__init__(self, visible_graph)
+    def __init__(self, process_type, process_count, graph, arguments = None):
+        Simulation.__init__(self, process_type, process_count, graph, arguments)
         self.register_event("step")
         self.register_event("visible_step")
         self.generator = None
         self.visible_count = 0
-
-    def run(self):
-        pass
-
-    def stop(self):
-        del self.processes[:]
-        self.env._now = 0
-        self.fire("end_simulation", self)
+        self.ctx.graph_stats = VisualGraphStats(graph, process_count)
 
     def prepare(self):
         self.visible_count = 0
-        self.graph.reset()
-        self.prepare_processes()
         self.generator = self._create_generator()
-        self.fire("start_simulation", self)
+        self.ctx.graph_stats.reset()
 
     def step(self):
         try:
@@ -166,7 +153,7 @@ class VisualSimulation(Simulation):
                 break
 
     def is_new_discovered(self):
-        curr = self.graph.get_discovered_nodes_count()
+        curr = self.ctx.graph_stats.get_discovered_nodes_count()
         if curr != self.visible_count:
             self.visible_count = curr
             return True
@@ -176,10 +163,15 @@ class VisualSimulation(Simulation):
         try:
             step = 0
             while True:
-                self.env.step()
+                self.ctx.env.step()
                 step += 1
                 yield step
         except simpy.core.EmptySchedule:
-            pass
-        #except Exception as ex:
-         #   print "VisualSimulator generator", ex.message
+            self.fire("end", self)
+
+    def run(self):
+        self._create_procesess()
+        self.running = True
+        self.fire("start", self)
+        self._prepare()
+

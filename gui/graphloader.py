@@ -3,17 +3,14 @@ from xml.etree.ElementTree import QName
 from gui import graph as g
 from gui.exceptions import GraphException, VisibleGraphException
 
+
 class AbstractGraphLoader():
     def __init__(self, filename):
-        self.filename = filename
         self.tree = ET.parse(filename);
-        self.root = self.tree.getroot()
+        self.root_el = self.tree.getroot()
         self.graph = None
 
-    def get_root(self):
-        return self.root
-
-    def solve_graph(self, graph):
+    def solve_graph(self):
         pass
     
     def solve_node(self, node):
@@ -29,49 +26,46 @@ class AbstractGraphLoader():
 class GraphLoader(AbstractGraphLoader):
     def __init__(self, filename):
         AbstractGraphLoader.__init__(self, filename)
-        self.root_node_id = self.root.get("init-node-id")
         self.graph = g.Graph()
-        self.arcs = []
+        self.edges = []
 
     def load(self):
         try:
-            self.solve_graph(self.root)
+            self.solve_graph()
             return self.graph
         except Exception as ex:
             raise GraphException(ex.message)
 
-    def solve_graph(self, graph):
-        nodes = graph.findall("node")
+    def solve_graph(self):
+        self.root_node_id = self.root_el.get("init-node-id")
+        nodes = self.root_el.findall("node")
 
         for node in nodes:
             self.solve_node(node)
 
         self.graph.set_root_node(self.root_node_id)
-        for from_node, arc in self.arcs:
-            self.graph.add_edge(from_node, self.solve_edge(arc))
+        for source_node_id, edge_el in self.edges:
+            self.solve_edge(source_node_id, edge_el)
 
     def solve_node(self, node):
-        arcs = node.findall("arc")
         node_id = node.get("id")
         size = float(node.get("size"))
-        for arc in arcs:
-            self._solve_edge(node_id, arc)
+        edges_elements = node.findall("arc")
 
-        n = g.Node(node_id, size)
-        n.graph = self.graph
-        self.graph.add_node(n)
+        for edge_el in edges_elements:
+            self.edges.append((node_id, edge_el))
 
-    def _solve_edge(self, from_node, arc):
-        self.arcs.append((from_node, arc))
+        self.graph.add_node(g.Node(node_id, size))
 
-    def solve_edge(self, edge):
-        to_node = edge.get("node-id")
-        label = edge.get("label")
-        events_count = int(edge.get("events-count"))
-        time = float(edge.get("time"))
-        pids = edge.get("pids").split(",")
-        n = self.graph.get_node(to_node)
-        return g.Edge(n, time, events_count, pids, label)
+    def solve_edge(self, source_node_id, edge_el):
+        target_node_id = edge_el.get("node-id")
+        label = edge_el.get("label")
+        events_count = int(edge_el.get("events-count"))
+        time = float(edge_el.get("time"))
+        pids = edge_el.get("pids").split(",")
+        source_node = self.graph.get_node(source_node_id)
+        target_node = self.graph.get_node(target_node_id)
+        self.graph.add_edge(g.Edge(source_node, target_node, time, events_count, pids, label))
 
 
 class SVGVisibleGraphLoader(AbstractGraphLoader):
@@ -80,12 +74,12 @@ class SVGVisibleGraphLoader(AbstractGraphLoader):
         self.graph_model = graph
         self.used_edges = []
 
-    def s(self, text):
+    def ls(self, text):
         return str(QName("http://www.w3.org/2000/svg", text))
 
     def load(self):
         try:
-            root = self.get_root()
+            root = self.root_el
             width = root.get("width")
             height = root.get("height")
             viewbox = root.get("viewBox")
@@ -93,14 +87,14 @@ class SVGVisibleGraphLoader(AbstractGraphLoader):
             width = int(width[:-2])
             height = int(height[:-2])
             self.graph = g.VisibleGraph(1, width, height)
-            graph_item = root.find(self.s("g"))
+            graph_item = root.find(self.ls("g"))
             self.solve_graph(graph_item)
             return self.graph
         except Exception as ex:
             raise VisibleGraphException(ex.message)
 
     def solve_graph(self, graph):
-        polygon = graph.find(self.s("polygon"))
+        polygon = graph.find(self.ls("polygon"))
         transform = graph.get("transform")
         tr = transform.split("translate", 1)[1]
         tr = tr[1:]
@@ -111,10 +105,9 @@ class SVGVisibleGraphLoader(AbstractGraphLoader):
         self.tr_y = float(tr_coords[1])
         self.graph.translate_x = self.tr_x
         self.graph.translate_y = self.tr_y
-        self.solve_polygon(polygon)
 
-        nodes_items = graph.findall(self.s("g[@class='node']"))
-        edges_items = graph.findall(self.s("g[@class='edge']"))
+        nodes_items = graph.findall(self.ls("g[@class='node']"))
+        edges_items = graph.findall(self.ls("g[@class='edge']"))
 
         for node in nodes_items:
             self.solve_node(node)
@@ -126,7 +119,7 @@ class SVGVisibleGraphLoader(AbstractGraphLoader):
             sorted_edges = []
             if len(edges) == 0:
                 continue
-            model_edges = self.graph_model.get_node(node.get_name()).get_edges()
+            model_edges = self.graph_model.get_node(node.get_id()).get_edges()
 
             for model_edge in model_edges:
                 fe = [e for e in edges if e.get_time() == model_edge.get_time() and e.label == model_edge.label]
@@ -137,13 +130,13 @@ class SVGVisibleGraphLoader(AbstractGraphLoader):
 
             node.edges = sorted_edges
 
-        self.graph.set_root_node(self.graph_model.root.name)
+        self.graph.set_root_node(self.graph_model.root.id)
 
     def solve_node(self, node):
-        title = node.find(self.s("title"))
+        title = node.find(self.ls("title"))
         model_node = self.graph_model.get_node(title.text)
-        polygon = node.find(self.s("polygon"))
-        text = node.find(self.s("text"))
+        polygon = node.find(self.ls("polygon"))
+        text = node.find(self.ls("text"))
         polygon = self.solve_polygon(polygon)
         x = polygon[2][0][0]
         y = polygon[2][0][1]
@@ -152,30 +145,38 @@ class SVGVisibleGraphLoader(AbstractGraphLoader):
         x += w
         w = abs(w)
         node = g.VisibleNode(title.text, model_node.get_size(), x, y, w, h)
-        node.graph = self.graph
         self.graph.add_node(node)
         return node
 
     def solve_edge(self, edge):
-        path = edge.find(self.s("path"))
-        polygon = edge.find(self.s("polygon"))
-        text = edge.find(self.s("text"))
-        title = edge.find(self.s("title"))
+        path = edge.find(self.ls("path"))
+        polygon = edge.find(self.ls("polygon"))
+        text = edge.find(self.ls("text"))
+        title = edge.find(self.ls("title"))
         title = title.text.split("->")
-        source = title[0]
-        destination = title[1]
         path = self.solve_path(path)
         polygon = self.solve_polygon(polygon)
         label = self.solve_text(text)
-        destination_node = self.graph.get_node(destination)
-        source_node = self.graph_model.get_node(source)
-        sources_edges = [e for e in source_node.get_edges() 
-                         if e.destination.name == destination and e.label == label[2]]
-        model_edge = sources_edges[0]
-        edge = g.VisibleEdge(destination_node, model_edge.get_time(),
-                             model_edge.events_count, model_edge.pids,
+
+        target_node = self.graph.get_node(title[1])
+        source_node = self.graph_model.get_node(title[0])
+
+        model_edge = None
+        source_edges = source_node.get_edges()
+        for se in source_edges:
+            if se.target.id == title[1] and se.label == label[2]:
+                model_edge = se
+                break
+        if not model_edge:
+            raise Exception("Model edge not found")
+
+        edge = g.VisibleEdge(source_node,
+                             target_node,
+                             model_edge.get_time(),
+                             model_edge.events_count,
+                             model_edge.pids,
                              label[2], label[0], label[1], path[2], polygon[2])
-        self.graph.add_edge(source, edge)
+        self.graph.add_edge(edge)
         return edge
 
     def solve_polygon(self, polygon):

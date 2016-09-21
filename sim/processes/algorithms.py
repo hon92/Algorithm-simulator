@@ -1,31 +1,34 @@
 import process
 import storage
 import random as r
+from sim.processes.process import Message
 
-class Algorithm1(process.GraphProcess):
+
+class Algorithm1(process.StorageProcess):
     NAME = "Algorithm 1"
     DESCRIPTION = "If process has more then 1 task to do, he try to send new \
 task to another process which is waiting for work."
 
     def __init__(self, id, ctx):
-        process.GraphProcess.__init__(self, id, self.NAME, ctx)
-        self.storage = storage.QueueStorage()
+        process.StorageProcess.__init__(self, id, self.NAME, ctx, storage.QueueStorage())
 
-    def initialize(self):
+    def init(self):
         if self.get_id() == 0:
-            self.storage.put(self.graph.root)
-            self.graph.root.discover(0)
+            root = self.ctx.graph.get_root()
+            self.storage.put(root)
+            self.ctx.graph_stats.discover_node(root.get_id(), 0)
 
     def run(self):
+        gs = self.ctx.graph_stats
         while True:
             self.clock.tick()
             if self.storage.get_size() > 0:
                 node = self.storage.get()
                 if self.storage.get_size() > 1:
                     found = False
-                    for p in self.communicator.get_processes():
+                    for p in self.ctx.processes:
                         if p.storage.get_size() == 0:
-                            self.communicator.send_node(node, p.id)
+                            self.communicator.isend(node, p.id)
                             found = True
                             break
                     if found:
@@ -33,10 +36,10 @@ task to another process which is waiting for work."
 
                 for edge in node.get_edges():
                     yield self.solve_edge(edge)
-                    new_node = edge.get_destination()
-                    if new_node.is_discovered():
+                    new_node = edge.get_target()
+                    if gs.is_node_discovered(new_node.get_id()):
                         continue
-                    new_node.discover(self.id)
+                    gs.discover_node(new_node.get_id(), self.id)
                     self.storage.put(new_node)
             else:
                 yield self.wait()
@@ -66,7 +69,7 @@ send new task."
                     for edge in node.get_edges():
                         edge.discover(self.id)
                         yield self.solve_edge(edge)
-                        new_node = edge.get_destination()
+                        new_node = edge.get_target()
                         i = self.partition(new_node)
                         if i == self.id:
                             self.storage.put(new_node)
@@ -105,7 +108,7 @@ class Algorithm3(process.GraphProcess):
                 node = self.storage.get()
                 for edge in node.get_edges():
                     yield self.solve_edge(edge)
-                    new_node = edge.get_destination()
+                    new_node = edge.get_target()
                     if not new_node.is_discovered():
                         next = self.id + 1 % process_count
                         if next != self.id:

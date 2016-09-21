@@ -15,12 +15,6 @@ class GraphManager():
         return [filename for filename in self.graphs]
 
     def register_graph(self, filename):
-        if not filename.endswith(".xml"):
-            raise ex.ProjectException("'{0}' is invalid graph filename".format(filename))
-        if not os.path.exists(filename):
-            raise ex.ProjectException("'{0}' not exists".format(filename))
-        if filename in self.graphs:
-            return
         try:
             graph = self.get_graph_now(filename)
             self.graphs[filename] = [graph]
@@ -38,13 +32,19 @@ class GraphManager():
         if filename in self.graphs:
             return self.graphs[filename][0]
 
+    """
     def get_graph(self, filename):
+        print "get graph", filename
         if filename in self.graphs:
             available_graphs = self.graphs[filename]
             if len(available_graphs) > 0:
                 return available_graphs.pop()
             elif len(available_graphs) == 0:
                 return self.get_graph_now(filename)
+    """
+    def get_graph(self, filename):
+        if filename in self.graphs:
+            return self.graphs[filename][0]
 
     def get_visible_graph(self, filename):
         if filename in self.visible_graphs:
@@ -74,6 +74,7 @@ class GraphManager():
 
     def get_graph_now(self, filename):
         graph = graphloader.GraphLoader(filename).load()
+        graph.filename = filename
         return graph
 
     def get_visible_graph_now(self, filename):
@@ -88,10 +89,12 @@ class GraphManager():
         visible_graph = None
         if new_file:
             visible_graph = graphloader.SVGVisibleGraphLoader(graph, new_file).load()
-        self.return_graph(filename, graph)
+            visible_graph.filename = filename
+        self.return_graph(graph)
         return visible_graph
 
-    def return_graph(self, filename, graph, visibile_graf = False):
+    def return_graph(self, graph, visibile_graf = False):
+        filename = graph.filename
         if visibile_graf:
             current_graphs = self.visible_graphs[filename]
         else:

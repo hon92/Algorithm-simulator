@@ -15,14 +15,15 @@ class Window(gtk.Window):
     def _create_notebook(self):
         self.notebook = gtk.Notebook()
         self.notebook.set_scrollable(True)
-        self.notebook.popup_enable()
+        #self.notebook.popup_enable()
         self.notebook.set_tab_pos(gtk.POS_TOP)
         return self.notebook
 
     def _create_window(self):
         self.set_title("")
         self.set_position(gtk.WIN_POS_CENTER)
-        self.set_size_request(settings.get("WINDOW_WIDTH"), settings.get("WINDOW_HEIGHT"))
+        self.set_size_request(settings.get("WINDOW_WIDTH"),
+                              settings.get("WINDOW_HEIGHT"))
         self.connect("destroy", self.close)
 
         vbox = gtk.VBox()
@@ -125,6 +126,7 @@ class Window(gtk.Window):
     def close(self, w):
         self.app.close()
 
+
 class Console(gtk.HBox):
     def __init__(self):
         gtk.HBox.__init__(self)
@@ -175,7 +177,7 @@ class Console(gtk.HBox):
             self.scroll_to_end()
 
     def write(self, text, tag = "out"):
-        gtk.idle_add(lambda: self._write_to_buffer(text, tag))
+        self._write_to_buffer(text, tag)
 
     def writeln(self, text, tag = "out"):
         self.write(text + "\n", tag)
@@ -200,3 +202,4 @@ class Console(gtk.HBox):
 
     def scroll_to_end(self):
         self.textview.scroll_mark_onscreen(self.buffer.get_insert())
+

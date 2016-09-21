@@ -31,7 +31,7 @@ class CSVExportDataModule(ExportDataModule):
             header += "#process{0};".format(pr.get_id())
 
             for m in mm.monitors:
-                header += "##{0};".format(m.get_name())
+                header += "##{0};".format(m.get_id())
                 for entry in m.entries.values():
                     header += "###{0};".format(entry.entry_name)
                     for arg in entry.args:

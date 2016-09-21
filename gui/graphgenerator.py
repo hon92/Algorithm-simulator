@@ -62,7 +62,7 @@ class GraphGenerator():
             time = self.r.random()
             events_count = self.r.randint(1, 1000)
             pids = ""
-            label = source_n.get_name() + "/" + dest_n.get_name()
+            label = source_n.get_id() + "/" + dest_n.get_id()
             e = Edge(dest_n, time, events_count, pids, label)
             source_n.add_edge(e)
 
@@ -82,17 +82,17 @@ class GraphGenerator():
 
     def save_graph(self, filename, graph):
         root = Element("statespace")
-        root.set("init-node-id", graph.get_root().get_name())
+        root.set("init-node-id", graph.get_root().get_id())
 
         def save_node(node):
             node_el = SubElement(root, "node")
-            node_el.set("id", str(node.get_name()))
+            node_el.set("id", str(node.get_id()))
             node_el.set("size", str(node.get_size()))
             return node_el
 
         def save_edge(edge, parent_node_el):
             edge_el = SubElement(parent_node_el, "arc")
-            edge_el.set("node-id", edge.get_destination().get_name())
+            edge_el.set("node-id", edge.get_target().get_id())
             edge_el.set("label", edge.get_label())
             edge_el.set("events-count", str(edge.get_events_count()))
             edge_el.set("time", str(edge.get_time()))

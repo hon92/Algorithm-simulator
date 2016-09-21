@@ -1,4 +1,3 @@
-
 class EventSource():
     def __init__(self):
         self.callbacks = {}

@@ -1,22 +1,85 @@
+import re
+
+
 class MonitorManager():
+    REGEX = "(^p)(\d+)(_)(\w+)"
+
     def __init__(self):
-        self.monitors = []
+        self.monitors = {}
+        self.events = {} #key -> event name, value -> callbacks list
+        self.process_monitors = {} # key -> process id, val -> callbacks list
 
-    def register_monitor(self, monitor):
-        self.monitors.append(monitor)
+        self.listeners = {}
+        self.process_listeners = {}
 
-    def unregister_monitor(self, monitor):
-        if monitor in self.monitors:
-            self.monitors.remove(monitor)
+    def add_callback(self, event_name, object):
+        if event_name in self.listeners:
+            self.listeners[event_name].append(object)
+        else:
+            self.listeners[event_name] = [object]
 
-    def collect(self, monitors_to_collect = None):
-        for mon in self.monitors:
-            yield mon.collect(monitors_to_collect)
+    def add_process_callback(self, event_name, process_id, object):
+        if process_id in self.process_listeners:
+            listeners = self.process_listeners[process_id]
+            if event_name in listeners:
+                listeners[event_name].append(object)
+            else:
+                listeners[event_name]  = [object]
+        else:
+            self.process_listeners[process_id] = {event_name: [object]}
 
-    def get_monitor(self, monitor_name):
-        for m in self.monitors:
-            if m.get_name() == monitor_name:
-                return m
+        self.add_callback(event_name, object)
+
+    def connect(self, event_name, callback):
+        m = re.match(self.REGEX, event_name)
+        if m:
+            pid = int(m.group(2))
+            ev_name = m.group(4)
+            if pid in self.process_listeners and ev_name in self.process_listeners[pid]:
+                self._dispatch_process_callback(pid, ev_name, callback)
+            else:
+                raise Exception("Unknown process event name")
+        else:
+            if event_name in self.listeners:
+                self._dispatch_event(event_name, callback)
+            else:
+                raise Exception("Unknown event name")
+
+    def _dispatch_event(self, event_name, callback):
+        source_objects = self.listeners[event_name]
+        for object in source_objects:
+            object.connect(event_name, callback)
+
+    def _dispatch_process_callback(self, process_id, event_name, callback):
+        listeners = self.process_listeners[process_id]
+        source_objects = listeners[event_name]
+        for object in source_objects:
+            object.connect(event_name, callback)
+
+    def register_process_monitor(self, pid, monitor):
+        if pid not in self.monitors:
+            self.monitors[pid] = [monitor]
+        else:
+            self.monitors[pid].append(monitor)
+ 
+    def unregister_process_monitor(self, pid, monitor):
+        if pid in self.monitors:
+            monitors = self.monitors[pid]
+            for m in monitors:
+                if m == monitor:
+                    monitors.remove(m)
+                    break
+# 
+#     def collect(self, monitors_to_collect = None):
+#         for mon in self.monitors:
+#             yield mon.collect(monitors_to_collect)
+ 
+    def get_process_monitor(self, pid, monitor_name):
+        if pid in self.monitors:
+            monitors = self.monitors[pid]
+            for m in monitors:
+                if m.get_id() == monitor_name:
+                    return m
         return None
 
 
@@ -28,14 +91,15 @@ class Entry():
     def check(self, val):
         return len(val) == len(self.args)
 
+
 class Monitor():
-    def __init__(self, name):
-        self.name = name
+    def __init__(self, id):
+        self.id = id
         self.data = {}
         self.entries = {}
 
-    def get_name(self):
-        return self.name
+    def get_id(self):
+        return self.id
 
     def put(self, entry_name, val):
         if entry_name in self.entries:
@@ -58,66 +122,109 @@ class Monitor():
         self.entries[name] = Entry(name, args)
         self.data[name] = []
 
-    def set_enabled(self, enabled):
-        self.enabled = enabled
-
-    def is_enabled(self):
-        return self.enabled
-
     def get_header_data(self):
         return ";".join(self.data.keys())
+
 
 class TimeMonitor(Monitor):
     def __init__(self, clock):
         Monitor.__init__(self, "TimeMonitor")
-        self.add_entry("wait", "current_time", "added_time")
+        self.add_entry("time_added", "current_time", "added_time")
         self.clock = clock
-        self.clock.connect("wait", self.on_time_added)
+        self.clock.connect("time_added", self.on_time_added)
 
     def on_time_added(self, current_time, added_time):
-        self.put("wait", (current_time, added_time))
+        self.put("time_added", (current_time, added_time))
+
 
 class MemoryMonitor(Monitor):
     def __init__(self, storage, clock):
         Monitor.__init__(self, "MemoryMonitor")
-        self.add_entry("push_time", "simulation_time", "storage_size")
-        self.add_entry("pop_time", "simulation_time", "storage_size")
-        self.add_entry("push_step", "clock_step", "storage_size")
-        self.add_entry("pop_step", "clock_step", "storage_size")
+        self.add_entry("push_time", "item", "simulation_time", "storage_size")
+        self.add_entry("pop_time", "item", "simulation_time", "storage_size")
+        self.add_entry("push_step", "item", "clock_step", "storage_size")
+        self.add_entry("pop_step", "item", "clock_step", "storage_size")
         self.add_entry("memory_usage_time", "simulation_time", "storage_size")
         self.add_entry("memory_usage_step", "clock_step", "storage_size")
         self.storage = storage
         self.clock = clock
         self.storage.connect("push", self.on_push)
         self.storage.connect("pop", self.on_pop)
+        self.clock.connect("step", self.on_step)
 
-    def on_push(self):
-        self.put("push_time", (self.clock.get_simulation_time(), self.storage.get_size()))
-        self.put("push_step", (self.clock.get_step(), self.storage.get_size()))
+    def on_push(self, item):
+        used_memory = self.clock.process.get_used_memory()
+        self.put("push_time", (item,
+                               self.clock.get_simulation_time(),
+                               used_memory))
+        self.put("push_step", (item,
+                               self.clock.get_step(),
+                               used_memory))
 
-    def on_pop(self):
-        self.put("pop_time", (self.clock.get_simulation_time(), self.storage.get_size()))
-        self.put("pop_step", (self.clock.get_step(), self.storage.get_size()))
+    def on_pop(self, item):
+        used_memory = self.clock.process.get_used_memory()
+        self.put("pop_time", (item,
+                              self.clock.get_simulation_time(), used_memory))
+        self.put("pop_step", (item,
+                              self.clock.get_step(), used_memory))
+
+    def on_step(self, steps, current_step):
+        self.put("memory_usage_time",
+                 (self.clock.get_simulation_time(),
+                  self.clock.process.get_used_memory()))
+        self.put("memory_usage_step",
+                 (steps,
+                  self.clock.process.get_used_memory()))
 
 
 class EdgeMonitor(Monitor):
     def __init__(self, graph_process):
         Monitor.__init__(self, "EdgeMonitor")
-        self.add_entry("edge_discovered", "simulation_time", "clock_time", "clock_step")
-        self.add_entry("edge_calculated", "simulation_time", "clock_time", "clock_step", "edge_time")
-        self.add_entry("edge_completed", "simulation_time", "clock_time", "clock_step")
+        self.add_entry("edge_discovered",
+                       "simulation_time",
+                       "process_id",
+                       "edge_time",
+                       "edge_label",
+                       "source_node_id",
+                       "target_node_id")
+        self.add_entry("edge_calculated",
+                       "simulation_time",
+                       "process_id",
+                       "edge_time",
+                       "edge_label",
+                       "source_node_id",
+                       "target_node_id")
         graph_process.connect("edge_discovered", self.on_edge_discovered)
         graph_process.connect("edge_calculated", self.on_edge_calculated)
-        graph_process.connect("edge_completed", self.on_edge_completed)
 
-    def on_edge_discovered(self, sim_time, process_time, process_step):
-        self.put("edge_discovered", (sim_time, process_time, process_time))
+    def on_edge_discovered(self,
+                           sim_time,
+                           process_id,
+                           edge_time,
+                           edge_label,
+                           source_node_id,
+                           target_node_id):
+        self.put("edge_discovered", (sim_time,
+                                     process_id,
+                                     edge_time,
+                                     edge_label,
+                                     source_node_id,
+                                     target_node_id))
 
-    def on_edge_completed(self, sim_time, process_time, process_step):
-        self.put("edge_completed", (sim_time, process_time, process_time))
+    def on_edge_calculated(self,
+                           sim_time,
+                           process_id,
+                           edge_time,
+                           edge_label,
+                           source_node_id,
+                           target_node_id):
+        self.put("edge_calculated", (sim_time,
+                                     process_id,
+                                     edge_time,
+                                     edge_label,
+                                     source_node_id,
+                                     target_node_id))
 
-    def on_edge_calculated(self, sim_time, process_time, process_step, edge_time):
-        self.put("edge_calculated", (sim_time, process_time, process_time, edge_time))
 
 class ProcessMonitor(Monitor):
     def __init__(self, process):

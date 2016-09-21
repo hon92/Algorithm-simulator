@@ -6,26 +6,29 @@ class Storage(EventSource):
         EventSource.__init__(self)
         self.register_event("push")
         self.register_event("pop")
+        self.register_event("size_exceeded")
         self.current = 0
-        self.max = self.current
+        self.max_size = self.current
         self.container = None
 
     def get_size(self):
         return self.current
 
-    def get_max(self):
-        return self.max
+    def get_max_size(self):
+        return self.max_size
 
     def get(self):
-        self.fire("pop")
+        item = self.get_item()
+        self.fire("pop", item)
         self.current -= 1
-        return self.get_item()
+        return item
 
     def put(self, val):
         self.current += 1
-        if self.current > self.max:
-            self.max = self.current
-        self.fire("push")
+        if self.current > self.max_size:
+            self.fire("size_exceeded", self.current, self.max_size)
+            self.max_size = self.current
+        self.fire("push", val)
         self.put_item(val)
 
     def get_item(self):

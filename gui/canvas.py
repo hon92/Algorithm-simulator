@@ -2,7 +2,9 @@ import gtk
 import cairo
 import math
 
+
 class Canvas(gtk.DrawingArea):
+
     DASH = [10,10,10,10,10]
 
     def __init__(self):
@@ -152,3 +154,4 @@ class Canvas(gtk.DrawingArea):
 
     def dispose(self):
         self.surface = None
+

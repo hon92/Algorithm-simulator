@@ -1,262 +1,272 @@
 
 class Property():
-    def __init__(self, name, value, tooltip, key = None):
-        self.name = name
+    def __init__(self, parent, id, value, tooltip, key = None):
+        self.parent = parent
+        self.id = id
         self.value = value
         self.tooltip = tooltip
-        self.key = name
+        self.key = id
         if key:
             self.key = key
 
-class ChildProperty(Property):
-    def __init__(self, parent, name, value, tooltip, key = None):
-        Property.__init__(self, name, value, tooltip, key)
-        self.parent = parent
-
 class Statistics():
-    def add_prop(self, property):
-        pass
-
-    def init(self):
-        pass
-
-    def reset(self):
-        pass
-
-    def update_prop(self, prop_key, new_val):
-        pass
-
-class TreeViewStatistics(Statistics):
-    def __init__(self, store):
-        self.s = store
+    def __init__(self, liststore):
+        self.ls = liststore
         self.props = {} # key -> property key, value -> path
 
     def add_prop(self, property):
-        i = self.s.append(property.parent, [property.name,
+        i = self.ls.append(property.parent, [property.id + ": ",
                                              property.value,
                                              property.tooltip])
-        path = self.s.get_path(i)
+        path = self.ls.get_path(i)
         self.props[property.key] = (path, property)
         return i
 
     def update_prop(self, prop_key, new_val):
         path, _ = self.props[prop_key]
-        self.s[path][1] = str(new_val)
+        self.ls[path][1] = str(new_val)
 
     def get_prop(self, prop_key):
         path, _ = self.props[prop_key]
-        return self.s[path][1]
+        return self.ls[path][1]
 
     def reset(self):
         for p in self.props.keys():
             _, prop = self.props[p]
             self.update_prop(p, prop.value)
 
-class StateStatistics(TreeViewStatistics):
+
+class StateStatistics(Statistics):
     def __init__(self, properties_store):
-        TreeViewStatistics.__init__(self, properties_store)
+        Statistics.__init__(self, properties_store)
+        self.init_properties()
 
-    def init(self):
-        i = self.add_prop(ChildProperty(None, "Info", "", ""))
-        self.add_prop(ChildProperty(i,
-                                    "Name",
-                                    "init",
-                                    "State unique name"))
-        self.add_prop(ChildProperty(i,
-                                    "Size",
-                                    "-1",
-                                    "Size of selected state in state space"))
-        self.add_prop(ChildProperty(i,
-                                    "Visible",
-                                    "False",
-                                    ""))
-        self.add_prop(ChildProperty(i,
-                                    "Succesors",
-                                    "-1",
-                                    "Count of edges from state"))
-        self.add_prop(ChildProperty(i,
-                                    "Discoverd by",
-                                    "-1",
-                                    ""))
-        self.add_prop(ChildProperty(i,
-                                    "Undiscovered succesors",
-                                    "-1",
-                                    ("Count of undiscovered nodes, which this state can "
-                                    "immediate reach and they are not discovered yet")))
-        self.add_prop(ChildProperty(i,
-                                    "Unfinished succesors",
-                                    "-1",
-                                    ("Count of unfinished nodes, which this state can "
-                                    "immediate reach and they are not finished yet")))
+    def init_properties(self):
+        i = self.add_prop(Property(None, "Info", "", "Info section"))
+        self.add_prop(Property(i,
+                               "Name",
+                               "",
+                               "State unique id"))
+        self.add_prop(Property(i,
+                               "Size",
+                               "",
+                               "Size of selected state in state space"))
+        self.add_prop(Property(i,
+                               "Visible",
+                               "",
+                               "Visibility of node"))
+        self.add_prop(Property(i,
+                               "Succesors",
+                               "",
+                               "Count of edges from state"))
+        self.add_prop(Property(i,
+                               "Discoverd by",
+                               "",
+                               "Which process discovered this node"))
+        self.add_prop(Property(i,
+                               "Undiscovered succesors",
+                               "",
+                               ("Count of undiscovered nodes, which this state can "
+                                "immediate reach and they are not discovered yet")))
+        self.add_prop(Property(i,
+                               "Unfinished succesors",
+                               "",
+                               ("Count of unfinished nodes, which this state can "
+                                "immediate reach and they are not finished yet")))
 
-        """
-        i = self.add_prop(ChildProperty(None, "Simulation", "", ""))
-        self.add_prop(ChildProperty(i,
-                                    "Discovered by",
-                                    "-1",
-                                    ""))
-        self.add_prop(ChildProperty(i,
-                                    "Completed by",
-                                    "-1",
-                                    ""))
-        i = self.add_prop(ChildProperty(None, "Time", "", ""))
-        self.add_prop(ChildProperty(i,
-                                    "Discovered time",
-                                    "-1",
-                                    ""))
-        self.add_prop(ChildProperty(i,
-                                    "Completed time",
-                                    "-1",
-                                    ""))
-        self.add_prop(ChildProperty(i,
-                                    "Waiting for completing",
-                                    "-1",
-                                    ""))
-
-        i = self.add_prop(ChildProperty(None, "Steps", "", ""))
-        self.add_prop(ChildProperty(i,
-                                    "Discovered in step",
-                                    "-1",
-                                    ""))
-        self.add_prop(ChildProperty(i,
-                                    "Completed in step",
-                                    "-1",
-                                    ""))
-        """
-
-    def update(self, state, simulator):
-        self.update_prop("Name", state.get_name())
-        self.update_prop("Size", state.get_size())
-        node = simulator.graph.get_node(state.get_name())
+    def update(self, node, simulation):
+        self.update_prop("Name", node.get_id())
+        self.update_prop("Size", node.get_size())
         edges = node.get_edges()
         self.update_prop("Succesors", len(edges))
-        self.update_prop("Undiscovered succesors",
-                         len([e for e in edges if e.get_discoverer() == -1]))
-        self.update_prop("Unfinished succesors",
-                         len([e for e in edges if e.get_complete() == -1]))
-        self.update_prop("Visible", node.get_discoverer() != -1)
-        self.update_prop("Discoverd by", node.get_discoverer())
+        gs = simulation.ctx.graph_stats
 
-class SimulationStatistics(TreeViewStatistics):
-    def __init__(self, info_store):
-        TreeViewStatistics.__init__(self, info_store)
-        self.process_path = None
+        undiscovered_edges = [e for e in edges if not gs.is_edge_discovered(e.source.id,
+                                                                            e.target.id,
+                                                                            e.label)]
+        uncomplete_edges = [e for e in edges if not gs.is_edge_completed(e.source.id,
+                                                                         e.target.id,
+                                                                         e.label)]
 
-    def init(self):
-        i = self.add_prop(ChildProperty(None, "Simulation", "", ""))
-        self.add_prop(ChildProperty(i,
-                                    "Time",
-                                    "-1",
-                                    "",
-                                    "sim_time"))
-        self.add_prop(ChildProperty(i,
-                                    "Step",
-                                    "-1",
-                                    ""))
-        self.add_prop(ChildProperty(i,
-                                    "Last step time",
-                                    "-1",
-                                    ""))
-        self.add_prop(ChildProperty(i,
-                                    "Algorithm",
-                                    "N/A",
-                                    ""))
-        self.add_prop(ChildProperty(i,
-                                    "Process count",
-                                    "-1",
-                                    ""))
+        node_discoverer = gs.get_node_discoverer(node.id)
+        if not node_discoverer:
+            node_discoverer = "N/A"
 
-        i = self.add_prop(ChildProperty(None, "Graph", "", ""))
-        self.add_prop(ChildProperty(i,
-                                    "Name",
-                                    "",
-                                    ""))
-        self.add_prop(ChildProperty(i,
-                                    "Nodes count",
-                                    "-1",
-                                    ""))
-        self.add_prop(ChildProperty(i,
-                                    "Edges count",
-                                    "-1",
-                                    ""))
-        self.add_prop(ChildProperty(i,
-                                    "Undiscovered nodes",
-                                    "-1",
-                                    ""))
-        self.add_prop(ChildProperty(i,
-                                    "Undiscovered edges",
-                                    "-1",
-                                    ""))
+        self.update_prop("Undiscovered succesors", len(undiscovered_edges))
+        self.update_prop("Unfinished succesors", len(uncomplete_edges))
+        self.update_prop("Visible", gs.is_node_visible(node.id))
+        self.update_prop("Discoverd by", node_discoverer)
 
-    def init_processes(self, count):
-        pi = self.add_prop(ChildProperty(None, "Processes", "", ""))
-        self.process_path = self.s.get_path(pi)
 
-        for p in range(count):
-            key = "p{0}".format(p)
+class SimulationStatistics(Statistics):
+    def __init__(self, info_store, simulation):
+        Statistics.__init__(self, info_store)
+        self.simulation = simulation
+
+    def init_properties(self):
+        self.ls.clear()
+        ctx = self.simulation.ctx
+        process_type = self.simulation.get_process_type()
+        process_count = self.simulation.get_process_count()
+        time = self.simulation.ctx.env.now
+        filename = ctx.graph.filename
+        gs = ctx.graph_stats
+        nodes_count = gs.get_nodes_count()
+        edges_count = gs.get_edges_count()
+        undiscovered_nodes_count = gs.get_undiscovered_nodes_count()
+        undiscovered_edges_count = gs.get_undiscovered_edges_count()
+        memory_peak = 0
+        for process in ctx.processes:
+            memory_peak += process.get_memory_peak()
+
+        i = self.add_prop(Property(None, "Simulation", "", "Simulation section"))
+        self.add_prop(Property(i,
+                               "Time",
+                               time,
+                               "Simulation time",
+                               "sim_time"))
+
+        self.add_prop(Property(i,
+                               "Memory peak",
+                               memory_peak,
+                               "Maximum memory used all processes in simulation",
+                               "sim_memory"))
+
+        self.add_prop(Property(i,
+                               "Step",
+                               "",
+                               "Step count in simulation"))
+        self.add_prop(Property(i,
+                               "Last step time",
+                               "",
+                               "Time of last step in simulation"))
+        self.add_prop(Property(i,
+                               "Algorithm",
+                               process_type,
+                               "Algorithm which was used for simulation"))
+        self.add_prop(Property(i,
+                               "Process count",
+                               process_count,
+                               "Count of used processes"))
+
+        i = self.add_prop(Property(None, "Graph", "", "Graph section"))
+        self.add_prop(Property(i,
+                               "Filename",
+                               filename,
+                               "Absolute path to graph file"))
+        self.add_prop(Property(i,
+                               "Nodes count",
+                               nodes_count,
+                               "Nodes (states) count in graph"))
+        self.add_prop(Property(i,
+                               "Edges count",
+                               edges_count,
+                               "Edges count in graph"))
+        self.add_prop(Property(i,
+                               "Undiscovered nodes",
+                               undiscovered_nodes_count,
+                               "The number of nodes (states) that had not been discovered"))
+        self.add_prop(Property(i,
+                               "Undiscovered edges",
+                               undiscovered_edges_count,
+                               "The number of edges that had not been discovered"))
+        self.init_processes_properties()
+
+    def init_processes_properties(self):
+        processes = self.simulation.ctx.processes
+
+        pi = self.add_prop(Property(None, "Processes", "", "Processes section"))
+        gs = self.simulation.ctx.graph_stats
+
+        for pr in processes:
+            key = "p{0}".format(pr.id)
             attr = key + "{0}"
-            i = self.add_prop(ChildProperty(pi, "Process", str(p), ""))
 
-            self.add_prop(ChildProperty(i,
-                                        "Id",
-                                        p,
-                                        ""))
-            self.add_prop(ChildProperty(i,
-                                        "Time",
-                                        "0",
-                                        "",
-                                        attr.format("time")))
-            self.add_prop(ChildProperty(i,
-                                        "Waiting time",
-                                        "0",
-                                        "",
-                                        attr.format("wait")))
-            self.add_prop(ChildProperty(i,
-                                        "Storage size",
-                                        "0",
-                                        "",
-                                        attr.format("storage")))
-            self.add_prop(ChildProperty(i,
-                                        "Discovered states count",
-                                        "0",
-                                        "",
-                                        attr.format("disc_states_count")))
-            self.add_prop(ChildProperty(i,
-                                        "Calculated states count",
-                                        "0",
-                                        "",
-                                        attr.format("calc_states_count")))
+            time = pr.clock.get_time()
+            memory = pr.get_used_memory()
+            memory_peak = pr.get_memory_peak()
+            waiting_time = self.simulation.ctx.env.now - time
+            nodes_discovered = gs.get_discovered_nodes_by_process(pr.id)
+            edges_discovered = gs.get_discovered_edges_by_process(pr.id)
+            edges_calculated = gs.get_calculated_edges_by_process(pr.id)
 
+            i = self.add_prop(Property(pi,
+                                       "Process",
+                                       pr.id,
+                                       "Process section"))
+
+            self.add_prop(Property(i,
+                                   "Id",
+                                   pr.id,
+                                   "Process id"))
+
+            self.add_prop(Property(i,
+                                   "Time",
+                                   time,
+                                   "Time which process worked",
+                                   attr.format("time")))
+
+            self.add_prop(Property(i,
+                                   "Waiting time",
+                                   waiting_time,
+                                   "Time which process was in waiting state",
+                                   attr.format("wait")))
+
+            self.add_prop(Property(i,
+                                   "Used memory",
+                                   memory,
+                                   "Actual memory usage of process",
+                                   attr.format("memory")))
+
+            self.add_prop(Property(i,
+                                   "Memory peak",
+                                   memory_peak,
+                                   "Maximum memory used by process",
+                                   attr.format("memory_peak")))
+
+            self.add_prop(Property(i,
+                                   "Nodes discovered",
+                                   nodes_discovered,
+                                   "Count of discovered nodes (states) by process",
+                                   attr.format("discovered_nodes")))
+
+            self.add_prop(Property(i,
+                                   "Edges discovered",
+                                   edges_discovered,
+                                   "Count of discovered edges by process",
+                                   attr.format("discovered_edges")))
+
+            self.add_prop(Property(i,
+                                   "Edges calculated",
+                                   edges_calculated,
+                                   "Count of calculated edges by process",
+                                   attr.format("calculated_edges")))
+
+
+    """
     def set_process_count(self, process_count):
         if self.process_path:
-            i = self.s.get_iter(self.process_path)
-            self.s.remove(i)
+            i = self.ls.get_iter(self.process_path)
+            self.ls.remove(i)
         self.init_processes(process_count)
 
-    def new_simulation(self, simulator):
-        processes = simulator.processes
+    def new_simulation(self, simulation):
+        processes = simulation.ctx.processes
         self.set_process_count(len(processes))
-        self.update_prop("Algorithm", processes[0].get_name())
+        self.update_prop("Algorithm", processes[0].get_id())
         self.update_prop("Process count", len(processes))
 
-    def update_graph(self, filename, graph):
-        self.update_prop("Name", filename)
-        self.update_prop("Nodes count", graph.get_nodes_count())
-        self.update_prop("Edges count", graph.get_edges_count())
-        self.update_undiscovered(graph)
+    def update_graph(self, simulation):
+        gs = simulation.ctx.graph_stats
+        self.update_prop("Filename", simulation.ctx.graph.filename)
+        self.update_prop("Nodes count", gs.get_nodes_count())
+        self.update_prop("Edges count", gs.get_edges_count())
+        self.update_undiscovered(simulation)
 
-    def update_undiscovered(self, graph):
-        undiscovered_nodes = graph.get_nodes_count()
-        undiscovered_edges = graph.get_edges_count()
-
-        for _, node in graph.nodes.iteritems():
-            if node.is_discovered():
-                undiscovered_nodes -= 1
-            for edge in node.get_edges():
-                if edge.is_discovered():
-                    undiscovered_edges -= 1
-        self.update_prop("Undiscovered nodes", undiscovered_nodes)
-        self.update_prop("Undiscovered edges", undiscovered_edges)
+    def update_undiscovered(self, simulation):
+        gs = simulation.ctx.graph_stats
+        self.update_prop("Undiscovered nodes", gs.get_undiscovered_nodes_count())
+        self.update_prop("Undiscovered edges", gs.get_undiscovered_edges_count())
 
     def update_processes(self, processes):
         for p in processes:
@@ -269,12 +279,13 @@ class SimulationStatistics(TreeViewStatistics):
                              p.storage.get_size())
 
             wt = float(self.get_prop(attr.format("wait")))
-            if (p.env.now - p.clock.get_time()) > wt:
-                wt = p.env.now - p.clock.get_time()
+            if (p.ctx.env.now - p.clock.get_time()) > wt:
+                wt = p.ctx.env.now - p.clock.get_time()
 
             self.update_prop(attr.format("wait"),
                              wt)
 
+            
             mm = p.get_monitor_manager()
             edge_mon = mm.get_monitor("EdgeMonitor")
             data = edge_mon.collect()
@@ -286,3 +297,5 @@ class SimulationStatistics(TreeViewStatistics):
             self.update_prop(attr.format("calc_states_count"),
                              len(calc_data))
 
+            
+    """
