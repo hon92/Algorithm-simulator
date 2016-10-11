@@ -305,7 +305,6 @@ class SimulationDetailTab(CloseTab):
 
         for process in self.simulation.ctx.processes:
             notebook = gtk.Notebook()
-            notebook.connect("switch-page", self.on_page_switch)
 
             pr_mem_usage_plot = plot.ProcessMemoryUsagePlot(process)
             pr_calc_edge_plot = plot.ProcessCalculatedPlot(process)
@@ -325,6 +324,7 @@ class SimulationDetailTab(CloseTab):
                                   pr_com_plot.get_title())
             self.notebook.append_page(notebook,
                                       gtk.Label("Detail of process {0}".format(process.id)))
+            notebook.connect("switch-page", self.on_page_switch)
 
         self.notebook.connect("switch-page", self.on_page_switch)
 

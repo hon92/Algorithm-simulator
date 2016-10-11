@@ -536,6 +536,7 @@ class ProcessCommunicationPlot(SimplePlot):
     def draw_plot(self):
         mm = self.process.ctx.monitor_manager
         com_monitor = mm.get_process_monitor(self.process.id, "CommunicationMonitor")
+        processes = self.process.ctx.processes
         send_entry = "send"
         receive_entry = "receive"
         asend_entry = "async_send"
@@ -550,16 +551,44 @@ class ProcessCommunicationPlot(SimplePlot):
         for _ in xrange(len(self.process.ctx.processes)):
             colors.append(next(color_cycler))
 
-        xdata = []
-        ydata = []
-        for sim_time, target_id, size in data[asend_entry]:
-            xdata.append(sim_time)
-            ydata.append(size)
+        legends = []
+        self.max_x = 0
+        self.max_y = 0
 
-        self.axis.vlines(xdata, [0], ydata, color = colors[self.process.id], label = "async_send")
-        if len(xdata) and len(ydata) > 0:
-            self.axis.set_xlim([0, xdata[-1] + 2])
-            self.axis.set_ylim([0, max(ydata)])
+        def draw_entry(entry_name, extra_text, linestyle):
+            for p in processes:
+                p_data = [(sim_time, size) for sim_time, tid, size in data[entry_name] if tid == p.id]
+                xdata = []
+                ydata = []
+                for sim_time, size in p_data:
+                    xdata.append(sim_time)
+                    ydata.append(size)
+                    if sim_time > self.max_x:
+                        self.max_x = sim_time
+                    if size > self.max_y:
+                        self.max_y = size
+
+                self.axis.vlines(xdata,
+                                 [0],
+                                 ydata,
+                                 color = colors[p.id],
+                                 label = entry_name,
+                                 linestyle = linestyle)
+                legends.append(mpatches.Patch(color = colors[p.id],
+                                              ls = "dashed",
+                                              label = "{0} {1} p {2} ({3})".format(entry_name,
+                                                                                   extra_text,
+                                                                                   p.id,
+                                                                                   linestyle)))
+
+        draw_entry(asend_entry, "to", "solid")
+        draw_entry(areceive_entry, "from", "dashed")
+        draw_entry(send_entry, "to", "dashdot")
+        draw_entry(receive_entry, "from", "dotted")
+
+        self.axis.set_xlim([0, self.max_x])
+        self.axis.set_ylim([0, self.max_y])
+        self.axis.legend(handles=legends, loc = "best")
 
 
 class ProcessPlot(AbstractMultiPlot):
