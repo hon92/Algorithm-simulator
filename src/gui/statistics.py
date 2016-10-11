@@ -116,10 +116,11 @@ class SimulationStatistics(Statistics):
         undiscovered_nodes_count = gs.get_undiscovered_nodes_count()
         undiscovered_edges_count = gs.get_undiscovered_edges_count()
         memory_peak = 0
-        mem_monitor = ctx.monitor_manager.get_process_monitor(0, "MemoryMonitor")
+        mem_monitor = ctx.monitor_manager.get_monitor("GlobalMemoryMonitor")
         if mem_monitor:
-            data = mem_monitor.collect(["memory_peak"])
-            for _, size in data["memory_peak"]:
+            mem_usage_entry = "memory_usage"
+            data = mem_monitor.collect([mem_usage_entry])
+            for _, size in data[mem_usage_entry]:
                 if size > memory_peak:
                     memory_peak = size
 
@@ -188,7 +189,15 @@ class SimulationStatistics(Statistics):
 
             time = pr.clock.get_time()
             memory = pr.get_used_memory()
-            memory_peak = pr.get_memory_peak()
+            memory_peak = 0
+            mm = pr.ctx.monitor_manager
+            mem_monitor = mm.get_process_monitor(pr.id, "MemoryMonitor")
+            mem_usage_entry = "memory_usage"
+            data = mem_monitor.collect([mem_usage_entry])
+            for sim_time, size in data[mem_usage_entry]:
+                if size > memory_peak:
+                    memory_peak = size
+
             waiting_time = self.simulation.ctx.env.now - time
             nodes_discovered = gs.get_discovered_nodes_by_process(pr.id)
             edges_discovered = gs.get_discovered_edges_by_process(pr.id)

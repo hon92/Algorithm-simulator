@@ -27,6 +27,9 @@ class AppArgs:
                 self.on_arg_error(ex.message)
 
             if args.select:
+                available_processes_names = pf.process_factory.get_processes_names()
+                if len(available_processes_names) == 0:
+                    self.on_arg_error("No available processes")
                 project_files = self.app.project.get_files()
                 used = []
                 for s in args.select:
@@ -51,9 +54,6 @@ class AppArgs:
                 files = [project_files[i] for i in used]
 
                 sim_count = 1
-                available_processes_names = pf.process_factory.get_processes_names()
-                if len(available_processes_names) == 0:
-                    self.on_arg_error("No available processes")
                 process_type = available_processes_names[0]
                 process_count = 1
 

@@ -230,6 +230,52 @@ class TxtDialogFactory(DialogFactory):
         return self.save(title, text)
 
 
+class PythonDialogFactory(DialogFactory):
+    def create_xml_filter(self):
+        python_file_filter = gtk.FileFilter()
+        python_file_filter.set_name("Python files")
+        python_file_filter.add_pattern("*.py")
+        return python_file_filter
+
+    def response(self, dialog):
+        try:
+            response = dialog.run()
+            if response == gtk.RESPONSE_OK:
+                filename = dialog.get_filename()
+                if filename:
+                    if filename.endswith(".py"):
+                        return filename
+                    else:
+                        return filename + ".py"
+                return filename
+            else:
+                return None
+        finally:
+            dialog.destroy()
+
+    def open(self, title = None):
+        if not title:
+            title = "Open python file"
+
+        dialog = gtk.FileChooserDialog(title,
+                                       None,
+                                       gtk.FILE_CHOOSER_ACTION_OPEN,
+                                       (gtk.STOCK_CANCEL,
+                                        gtk.RESPONSE_CANCEL,
+                                        gtk.STOCK_OPEN,
+                                        gtk.RESPONSE_OK))
+        dialog.set_default_response(gtk.RESPONSE_OK)
+        dialog.set_current_folder(paths.ROOT)
+        dialog.set_filter(self.create_xml_filter())
+        return self.response(dialog)
+
+    def save(self, title = None, text = None):
+        pass
+
+    def save_as(self, title = None, text = None):
+        pass
+
+
 class InputDialog(gtk.Dialog):
     def __init__(self, title, parent):
         gtk.Dialog.__init__(self, title,

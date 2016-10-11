@@ -158,8 +158,9 @@ class SimulationController():
         mm = self.simulation.ctx.monitor_manager
         mem_monitor = mm.get_process_monitor(0, "MemoryMonitor")
         if mem_monitor:
-            data = mem_monitor.collect(["memory_peak"])
-            for _, size in data["memory_peak"]:
+            entry = "memory_usage"
+            data = mem_monitor.collect([entry])
+            for _, size in data[entry]:
                 if size > memory_peak:
                     memory_peak = size
 

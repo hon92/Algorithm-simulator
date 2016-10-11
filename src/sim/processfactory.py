@@ -1,22 +1,29 @@
-import sys
 import importlib
-from processes import monitor
+import imp
+import inspect
+from sim.processes import process
 
 
 class ProcessFactory():
     def __init__(self):
         self.available_processes = []
+        self.scripts_paths = []
 
     def load_process_from_file(self, filename, class_name):
         module = importlib.import_module(filename)
         loaded_class = getattr(module, class_name)
+        self._class_check(loaded_class)
+        self._add_process_class(loaded_class)
+
+    def _class_check(self, loaded_class):
         if not hasattr(loaded_class, "NAME"):
             raise Exception("Process has to have NAME attribute")
         if not hasattr(loaded_class, "DESCRIPTION"):
             raise Exception("Process has to have DESCRIPTION attribute")
         if not hasattr(loaded_class, "PARAMS"):
             raise Exception("Process has to have PARAMS attribute")
-        self.available_processes.append(loaded_class)
+        if not issubclass(loaded_class, process.Process):
+            raise Exception("Class has to extend from 'Process' class")
 
     def get_processes_names(self):
         return [p.NAME for p in self.available_processes]
@@ -31,14 +38,7 @@ class ProcessFactory():
         process_class = self._get_process(name)
         if not process_class:
             raise Exception("Invalid process name")
-
-        process = process_class(id, ctx)
-        mm = ctx.monitor_manager
-        mm.register_process_monitor(id, monitor.MemoryMonitor(process))
-        mm.register_process_monitor(id, monitor.TimeMonitor(process))
-        mm.register_process_monitor(id, monitor.ProcessMonitor(process))
-        mm.register_process_monitor(id, monitor.EdgeMonitor(process))
-        return process
+        return process_class(id, ctx)
 
     def _get_process(self, name):
         for p in self.available_processes:
@@ -46,13 +46,40 @@ class ProcessFactory():
                 return p
         return None
 
-process_factory = ProcessFactory()
-try:
-    process_factory.load_process_from_file("sim.processes.algorithms", "Algorithm1")
-    process_factory.load_process_from_file("sim.processes.algorithms", "Algorithm2")
-    process_factory.load_process_from_file("sim.processes.algorithms", "Algorithm3")
-    process_factory.load_process_from_file("sim.processes.algorithms", "PingPongExample")
-except Exception as ex:
-    print ex.message
-    sys.exit(1)
+    def _add_process_class(self, process_class):
+        if process_class not in self.available_processes:
+            self.available_processes.append(process_class)
+            return True
+        return False
 
+    def load_from_script(self, script_path):
+        module = imp.load_source("", script_path)
+        added_new_class = False
+        for name, obj in inspect.getmembers(module, inspect.isclass):
+            loaded_class = getattr(module, name)
+            try:
+                self._class_check(loaded_class)
+            except Exception as ex:
+                err_msg = "Class '{0}' from file '{1}' was skipped because {2}"
+                print err_msg.format(loaded_class, script_path, ex.message)
+                continue
+            added = self._add_process_class(loaded_class)
+            if added:
+                added_new_class = True
+        if added_new_class:
+            self.scripts_paths.append(script_path)
+        else:
+            print "No scripts added from '{0}'".format(script_path)
+
+    def get_scripts_paths(self):
+        return self.scripts_paths
+
+    def clear_scripts(self):
+        self.scripts_paths = []
+
+    def remove_script(self, script_path):
+        if script_path in self.scripts_paths:
+            self.scripts_paths.remove(script_path)
+
+
+process_factory = ProcessFactory()

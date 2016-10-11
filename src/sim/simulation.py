@@ -4,6 +4,9 @@ from sim.processes.process import ProcessContext
 from sim.processes.monitor import MonitorManager
 from sim.processfactory import process_factory as pf
 from gui.graphstats import GraphStats, VisualGraphStats
+from processes.monitor import GlobalTimeMonitor, GlobalMemoryMonitor
+from sim.processes.process import StorageProcess
+from src.sim.processes.monitor import GlobalStorageMonitor
 
 
 class AbstractSimulation(events.EventSource):
@@ -39,11 +42,8 @@ class AbstractSimulation(events.EventSource):
         self.ctx.monitor_manager.clear_monitors()
         processes = self.create_processes()
         for p in processes:
-            p.init_monitor()
+            p.init_monitor_callbacks()
 
-        self.ctx.monitor_manager.clear_data()
-        for p in processes:
-            p.pre_init()
         self.ctx.processes = processes
 
     def start(self):
@@ -77,6 +77,7 @@ class AbstractSimulation(events.EventSource):
         self.processes_events = []
         for p in self.ctx.processes:
             p.init()
+            p.post_init()
             e = self.ctx.env.process(p.run())
             self.processes_events.append(e)
 
@@ -112,8 +113,19 @@ class Simulation(AbstractSimulation):
 
     def create_processes(self):
         procesess = []
+        global_time_monitor = GlobalTimeMonitor()
+        mm = self.ctx.monitor_manager
+        mm.register_monitor(global_time_monitor)
+
         for i in xrange(self.get_process_count()):
             procesess.append(pf.create_process(i, self.ctx, self.process_type))
+
+        global_memory_monitor = GlobalMemoryMonitor(global_time_monitor, procesess)
+        mm.register_monitor(global_memory_monitor)
+        pr = procesess[0]
+        if issubclass(pr.__class__, StorageProcess):
+            global_storage_monitor = GlobalStorageMonitor(procesess)
+            mm.register_monitor(global_storage_monitor)
         return procesess
 
 
@@ -156,6 +168,7 @@ class VisualSimulation(Simulation):
 
     def do_visible_step(self):
         s = 0
+        self.last_sim_time = self.ctx.env.now
         while self.is_running() and self.valid_step():
             s = self.do_step()
         self.fire("visible_step", self, s)
@@ -169,22 +182,10 @@ class VisualSimulation(Simulation):
             None
 
     def valid_step(self):
-        gs = self.ctx.graph_stats
-        discovered_nodes = gs.get_discovered_nodes_count()
-        discovered_edges = gs.get_discovered_edges_count()
-        calculated_edges = gs.get_calculated_edges_count()
-
-        valid_step = True
-        if discovered_nodes > self.discovered_nodes:
-            self.discovered_nodes = discovered_nodes
-            valid_step = False
-        if discovered_edges > self.discovered_edges:
-            self.discovered_edges = discovered_edges
-            valid_step = False
-        if calculated_edges > self.calculated_edges:
-            self.calculated_edges = calculated_edges
-            valid_step = False
-        return valid_step
+        now = self.ctx.env.now
+        if now > self.last_sim_time:
+            return False
+        return True
 
     def start(self):
         self._create_procesess()

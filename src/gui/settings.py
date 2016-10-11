@@ -1,11 +1,14 @@
 import paths
 import os
+import ntpath
 import gtk
 import gladeloader as gl
 from misc import utils
 from xml.etree.cElementTree import Element, SubElement, parse
 from pango import FontDescription
 from gui.events import EventSource
+from sim import processfactory as pf
+from gui.dialogs import dialog
 
 WINDOW_TITLE = "Process checker"
 VERSION = "2.0"
@@ -39,6 +42,9 @@ user_settings = { "VIZ_SIMULATION_TIMER": VIZ_SIMULATION_TIMER_DEF,
                   "WINDOW_HEIGHT": WINDOW_HEIGHT_DEF
                   }
 
+default_scripts = []
+user_scripts = []
+
 def init():
     config_file = get_config_file()
     if config_file_exists():
@@ -53,7 +59,7 @@ def config_file_exists():
     return os.path.exists(get_config_file())
 
 def _load_settings(config_filename):
-        tree = parse(config_filename);
+        tree = parse(config_filename)
         root = tree.getroot()
         if root.get("version") != VERSION:
             raise Exception("Invalid version of settings file")
@@ -79,7 +85,16 @@ def _load_settings(config_filename):
                     min_val = globals()[key + "_MIN"]
                     if val < min_val:
                         raise Exception("Value " + key + " is smaller then min value")
+
             user_settings[key] = val
+        scripts_el = root.find("scripts")
+        for script_el in scripts_el.findall("script"):
+            script_path = script_el.get("value")
+            if os.path.exists(script_path):
+                try:
+                    pf.process_factory.load_from_script(script_path)
+                except Exception as ex:
+                    print ex.message
 
 def _save_settings(config_filename):
         root = Element("settings")
@@ -89,7 +104,11 @@ def _save_settings(config_filename):
             set_elem = SubElement(root, "set")
             set_elem.set("name", str(k))
             set_elem.set("value", str(v))
-
+        scripts_el = SubElement(root, "scripts")
+        for s in user_scripts:
+            script_el = SubElement(scripts_el, "script")
+            script_el.set("name", ntpath.basename(s))
+            script_el.set("value", s)
         settings_data = utils.get_pretty_xml(root)
         with open(config_filename, "w") as f:
             f.write(settings_data)
@@ -153,6 +172,7 @@ class SettingPage(EventSource):
     def get_label(self):
         return gtk.Label(self.get_page_name())
 
+
 class GeneralSettingPage(SettingPage):
     def __init__(self):
         SettingPage.__init__(self, "General")
@@ -205,12 +225,14 @@ class GeneralSettingPage(SettingPage):
         user_settings["WINDOW_HEIGHT"] = WINDOW_HEIGHT_DEF
         user_settings["CONSOLE_HEIGHT"] = CONSOLE_HEIGHT_DEF
 
+
 class SimulationSettingPage(SettingPage):
     def __init__(self):
         SettingPage.__init__(self, "Simulation")
 
     def build_page(self):
         return gtk.VBox()
+
 
 class VisualSimSettingPage(SettingPage):
     def __init__(self):
@@ -245,3 +267,65 @@ class VisualSimSettingPage(SettingPage):
 
         user_settings["VIZ_SIMULATION_TIMER"] = VIZ_SIMULATION_TIMER_DEF
         user_settings["MAX_VISIBLE_GRAPH_NODES"] = MAX_VISIBLE_GRAPH_NODES_DEF
+
+
+class ScriptSettingPage(SettingPage):
+    def __init__(self):
+        SettingPage.__init__(self, "Scripts")
+
+    def build_page(self):
+        builder = gl.GladeLoader("scripts_settings_page").load()
+        vbox = builder.get_object("vbox")
+        self.liststore = builder.get_object("liststore")
+        self.treeview = builder.get_object("treeview")
+        self.add_button = builder.get_object("add_button")
+        self.remove_button = builder.get_object("remove_button")
+        self.add_button.connect("clicked", self.on_add_script)
+        self.remove_button.connect("clicked", self.on_remove_script)
+        self._load_scripts()
+        return vbox
+
+    def on_apply(self):
+        scripts_paths = pf.process_factory.get_scripts_paths()
+        global user_scripts
+        user_scripts = scripts_paths
+
+    def on_restore(self):
+        pf.process_factory.clear_scripts()
+        self.liststore.clear()
+        global default_scripts
+        global user_scripts
+        user_scripts = default_scripts
+
+    def on_add_script(self, w):
+        python_script = dialog.PythonDialogFactory().open("Load script")
+        if python_script:
+            try:
+                pf.process_factory.load_from_script(python_script)
+                self._load_scripts()
+            except RuntimeError as ex:
+                print ex.message
+            except Exception as ex:
+                print ex.message
+
+    def on_remove_script(self, w):
+        iter = self._get_selected_row_iter()
+        if iter:
+            script_path = self.liststore[iter][1]
+            pf.process_factory.remove_script(script_path)
+            self.liststore.remove(iter)
+
+    def _load_scripts(self):
+        self.liststore.clear()
+        for script in pf.process_factory.get_scripts_paths():
+            self.liststore.append([ntpath.basename(script), script])
+
+    def _get_selected_row_iter(self):
+        tree_selection = self.treeview.get_selection()
+        if tree_selection:
+            model, rows = tree_selection.get_selected_rows()
+            if model and rows:
+                if len(rows):
+                    return model.get_iter(rows[0][0])
+        return None
+

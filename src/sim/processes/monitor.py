@@ -1,4 +1,5 @@
 import re
+from src.gui.events import EventSource
 
 
 class MonitorManager():
@@ -9,6 +10,7 @@ class MonitorManager():
         self.monitors = {}
         self.listeners = {}
         self.process_listeners = {}
+        self.global_monitors = {}
 
     def add_callback(self, event_name, object):
         if event_name in self.listeners:
@@ -54,6 +56,12 @@ class MonitorManager():
         for object in source_objects:
             object.connect(event_name, callback)
 
+    def register_monitor(self, monitor):
+        m = self.global_monitors.get(monitor.get_id())
+        if m:
+            raise Exception("Cant register more same global monitors")
+        self.global_monitors[monitor.get_id()] = monitor
+
     def register_process_monitor(self, pid, monitor):
         if pid not in self.monitors:
             self.monitors[pid] = [monitor]
@@ -76,6 +84,10 @@ class MonitorManager():
 
     def clear_monitors(self):
         self.monitors = {}
+        self.global_monitors = {}
+
+    def get_monitor(self, monitor_id):
+        return self.global_monitors.get(monitor_id)
 
     def get_process_monitor(self, pid, monitor_name):
         if pid in self.monitors:
@@ -103,10 +115,11 @@ class Entry():
         return len(val) == len(self.args)
 
 
-class Monitor():
-    def __init__(self, id, process):
+class MonitorBase(EventSource):
+    def __init__(self, id):
+        EventSource.__init__(self)
+        self.register_event("entry_put")
         self.id = id
-        self.process = process
         self.data = {}
         self.entries = {}
 
@@ -118,8 +131,11 @@ class Monitor():
             entry = self.entries[entry_name]
             if entry.check(val):
                 self.data[entry_name].append(val)
+                self.fire("entry_put", val)
             else:
                 raise Exception("Invalid arguments for entry '" + entry_name + "'")
+        else:
+            raise Exception("Unknown entry name")
 
     def collect(self, monitors_to_collect = None):
         if monitors_to_collect:
@@ -139,67 +155,92 @@ class Monitor():
             del measured_data[:]
 
 
-class TimeMonitor(Monitor):
-    def __init__(self, process):
-        Monitor.__init__(self, "TimeMonitor", process)
-        self.add_entry("time_added", "current_time", "added_time")
-        self.process.clock.connect("time_added", self.on_time_added)
+class Monitor(MonitorBase):
+    def __init__(self, id, process):
+        MonitorBase.__init__(self, id)
+        self.process = process
 
-    def on_time_added(self, current_time, added_time):
-        self.put("time_added", (current_time, added_time))
+
+class ClockMonitor(Monitor):
+    def __init__(self, process):
+        Monitor.__init__(self, "ClockMonitor", process)
+        self.add_entry("time_stamp",
+                       "time",
+                       "time_added")
+        self.add_entry("step",
+                       "previous_steps",
+                       "steps")
+        process.clock.connect("time_stamp", self.on_time_stamp)
+        process.clock.connect("step", self.on_step)
+
+    def on_time_stamp(self, time, time_added):
+        self.put("time_stamp", (time, time_added))
+
+    def on_step(self, prev_steps, steps):
+        self.put("step", (prev_steps, steps))
 
 
 class MemoryMonitor(Monitor):
     def __init__(self, process):
         Monitor.__init__(self, "MemoryMonitor", process)
-        self.add_entry("push_time", "item", "simulation_time", "storage_size")
-        self.add_entry("pop_time", "item", "simulation_time", "storage_size")
-        self.add_entry("push_step", "item", "clock_step", "storage_size")
-        self.add_entry("pop_step", "item", "clock_step", "storage_size")
-        self.add_entry("memory_usage_time", "simulation_time", "storage_size")
-        self.add_entry("memory_usage_step", "clock_step", "storage_size")
-        self.add_entry("storage_changed", "simulation_time", "storage_size")
-        self.add_entry("memory_peak", "sim_time", "memory_usage")
+        self.add_entry("memory_usage", "simulation_time", "memory_usage")
+        gtm = process.ctx.monitor_manager.get_monitor("GlobalTimeMonitor")
+        gtm.connect("timeout", self.on_timeout)
 
-        storage = self.process.storage
-        clock = self.process.clock
-        storage.connect("push", self.on_push)
-        storage.connect("pop", self.on_pop)
-        storage.connect("changed", self.on_changed)
-        clock.connect("step", self.on_step)
-        clock.connect("time_added", self.on_time_added)
+    def on_timeout(self, sim_time, time, process_id):
+        self.put("memory_usage", (sim_time,
+                                  self.process.get_used_memory()))
 
-    def on_changed(self, sim_time, storage_time):
-        self.put("storage_changed", (sim_time, storage_time))
 
-    def on_push(self, item):
-        clock = self.process.clock
-        used_memory = clock.process.get_used_memory()
-        self.put("push_time", (item.id,
-                               clock.get_simulation_time(),
-                               used_memory))
-        self.put("push_step", (item.id,
-                               clock.get_step(),
-                               used_memory))
+class StorageMonitor(Monitor):
+    def __init__(self, process):
+        Monitor.__init__(self, "StorageMonitor", process)
+        self.add_entry("changed",
+                       "simulation_time",
+                       "size")
+        self.add_entry("push",
+                       "simulation_time",
+                       "storage_size")
+        self.add_entry("pop",
+                       "simulation_time",
+                       "storage_size")
+        self.process.storage.connect("changed",
+                                     self.on_storage_changed)
+        process.storage.connect("push", self.on_push)
+        process.storage.connect("pop", self.on_pop)
 
-    def on_pop(self, item):
-        clock = self.process.clock
-        used_memory = clock.process.get_used_memory()
-        self.put("pop_time", (item.id,
-                              clock.get_simulation_time(), used_memory))
-        self.put("pop_step", (item.id,
-                              clock.get_step(), used_memory))
+    def on_storage_changed(self, sim_time, size):
+        self.put("changed", (sim_time, size))
 
-    def on_step(self, steps, current_step):
-        self.put("memory_usage_step",
-                 (steps,
-                  self.process.clock.process.get_used_memory()))
+    def on_push(self, sim_time, storage_size):
+        self.put("push", (sim_time, storage_size))
 
-    def on_time_added(self, sim_time, time_added):
-        clock = self.process.clock
-        self.put("memory_usage_time",
-                 (sim_time,
-                  clock.process.get_used_memory()))
+    def on_pop(self, sim_time, storage_size):
+        self.put("pop", (sim_time, storage_size))
+
+
+class ProcessMonitor(Monitor):
+    def __init__(self, process):
+        Monitor.__init__(self, "ProcessMonitor", process)
+        self.add_entry("wait",
+                       "simulation_time")
+        self.add_entry("notify",
+                       "simulation_time")
+        self.add_entry("sleep",
+                       "simulation_time",
+                       "sleep_time")
+        process.connect("wait", self.on_wait)
+        process.connect("sleep", self.on_sleep)
+        process.connect("notify", self.on_notify)
+
+    def on_wait(self, sim_time):
+        self.put("wait", (sim_time,))
+
+    def on_sleep(self, sim_time, sleep_time):
+        self.put("sleep", (sim_time, sleep_time))
+
+    def on_notify(self, sim_time):
+        self.put("notify", (sim_time,))
 
 
 class EdgeMonitor(Monitor):
@@ -219,27 +260,20 @@ class EdgeMonitor(Monitor):
                        "edge_label",
                        "source_node_id",
                        "target_node_id")
-        self.add_entry("edges_discovered_time",
+        self.add_entry("edges_discovered_in_time",
                        "simulation_time",
-                       "edges_count")
-        self.add_entry("edges_calculated_time",
+                       "count")
+        self.add_entry("edges_discovered_cummulative",
                        "simulation_time",
-                       "edges_count")
+                       "cummulative_sum")
 
+        self.edges_discovered = 0
+        self.edges_time_sum = 0
+        mm = process.ctx.monitor_manager
+        gtm = mm.get_monitor("GlobalTimeMonitor")
+        gtm.connect("timeout", self.on_timeout)
         self.process.connect("edge_discovered", self.on_edge_discovered)
         self.process.connect("edge_calculated", self.on_edge_calculated)
-        self.discovered_edges = 0
-        self.calculated_edges = 0
-
-    def on_edge_discovered_in_time(self, sim_time):
-        self.put("edges_discovered_time", (sim_time, self.discovered_edges))
-
-    def on_edge_calculated_in_time(self, sim_time):
-        self.put("edges_calculated_time", (sim_time, self.calculated_edges))
-
-    def on_time_added(self, sim_time, time_added):
-        self.on_edge_discovered_in_time(sim_time)
-        self.on_edge_calculated_in_time(sim_time)
 
     def on_edge_discovered(self,
                            sim_time,
@@ -254,7 +288,7 @@ class EdgeMonitor(Monitor):
                                      edge_label,
                                      source_node_id,
                                      target_node_id))
-        self.discovered_edges += 1
+        self.edges_discovered += 1
 
     def on_edge_calculated(self,
                            sim_time,
@@ -269,21 +303,106 @@ class EdgeMonitor(Monitor):
                                      edge_label,
                                      source_node_id,
                                      target_node_id))
-        self.calculated_edges += 1
+        self.edges_time_sum += edge_time
+
+    def on_timeout(self, sim_time, time, process_id):
+        self.put("edges_discovered_in_time", (sim_time, self.edges_discovered))
+        self.put("edges_discovered_cummulative", (sim_time, self.edges_time_sum))
 
 
-class ProcessMonitor(Monitor):
+class CommunicationMonitor(Monitor):
     def __init__(self, process):
-        Monitor.__init__(self, "ProcessMonitor", process)
-        self.add_entry("wait", "simulation_time")
-        self.add_entry("notify", "simulation_time")
-        self.add_entry("memory_usage", "simulation_time", "memory_size")
-        self.process.connect("notify", self.on_notify)
-        self.process.connect("wait", self.on_wait)
+        Monitor.__init__(self, "CommunicationMonitor", process)
+        self.add_entry("send",
+                       "simulation_time",
+                       "target_process_id",
+                       "size")
+        self.add_entry("receive",
+                       "simulation_time",
+                       "source_process_id",
+                       "size")
+        self.add_entry("async_send",
+                       "simulation_time",
+                       "target_process_id",
+                       "size")
+        self.add_entry("async_receive",
+                       "simulation_time",
+                       "source_process_id",
+                       "size")
+        process.communicator.connect("send", self.on_send)
+        process.communicator.connect("receive", self.on_receive)
+        process.communicator.connect("async_send", self.on_async_send)
+        process.communicator.connect("async_receive", self.on_async_receive)
 
-    def on_notify(self, time):
-        self.put("notify", (time,))
+    def on_send(self, msg):
+        self.put("send",
+                 (self.process.clock.get_simulation_time(),
+                  msg.target,
+                  msg.size))
 
-    def on_wait(self, time):
-        self.put("wait", (time,))
+    def on_receive(self, msg):
+        self.put("receive",
+                 (self.process.clock.get_simulation_time(),
+                  msg.source,
+                  msg.size))
+
+    def on_async_send(self, msg):
+        self.put("async_send",
+                 (self.process.clock.get_simulation_time(),
+                  msg.target,
+                  msg.size))
+
+    def on_async_receive(self, msg):
+        self.put("async_receive",
+                 (self.process.clock.get_simulation_time(),
+                  msg.source,
+                  msg.size))
+
+
+class GlobalTimeMonitor(MonitorBase):
+    def __init__(self):
+        MonitorBase.__init__(self, "GlobalTimeMonitor")
+        self.register_event("timeout")
+        self.add_entry("timeout",
+                       "simulation_time",
+                       "time",
+                       "process_id")
+
+    def add_timeout(self, sim_time, time, process_id):
+        val = (sim_time, time, process_id)
+        self.put("timeout", val)
+        self.fire("timeout", *val)
+
+
+class GlobalMemoryMonitor(MonitorBase):
+    def __init__(self, global_time_monitor, processes):
+        MonitorBase.__init__(self, "GlobalMemoryMonitor")
+        self.add_entry("memory_usage",
+                       "simulation_time",
+                       "memory_usage")
+        self.processes = processes
+        global_time_monitor.connect("timeout", self.on_timeout)
+
+    def on_timeout(self, sim_time, time, process_id):
+        mem_usage = 0
+        for p in self.processes:
+            mem_usage += p.get_used_memory()
+        self.put("memory_usage", (sim_time, mem_usage))
+
+
+class GlobalStorageMonitor(MonitorBase):
+    def __init__(self, processes):
+        MonitorBase.__init__(self, "GlobalStorageMonitor")
+        self.add_entry("changed",
+                       "simulation_time",
+                       "storage_size")
+        self.processes = processes
+        for p in processes:
+            p.storage.connect("changed", self.on_storage_changed)
+
+    def on_storage_changed(self, sim_time, size):
+        s = 0
+        for p in self.processes:
+            s += p.get_used_memory()
+        self.put("changed", (sim_time, s))
 

@@ -50,8 +50,7 @@ class AbstractPlot():
         vbox.plot = self
         canvas = self._get_canvas()
         vbox.pack_start(canvas)
-        toolbar = NavigationToolbar(canvas, window)
-        vbox.pack_start(toolbar, False, False)
+        vbox.pack_start(NavigationToolbar(canvas, window), False)
         return vbox
 
     def get_figure(self):
@@ -228,12 +227,11 @@ class SubPlot(AbstactSimplePlot):
 # plots for simulation detail
 class MemoryUsagePlot(SimplePlot):
     def __init__(self, processes):
-        SimplePlot.__init__(self, "Memory usage", "time", "storage size")
+        SimplePlot.__init__(self, "Memory usage", "time", "memory usage")
         self.processes = processes
 
     def draw_plot(self):
-        entry_name = "storage_changed"
-        peak_entry = "memory_peak"
+        entry_name = "memory_usage"
         for process in self.processes:
             mm = process.ctx.monitor_manager
             mem_mon = mm.get_process_monitor(process.id, "MemoryMonitor")
@@ -248,18 +246,52 @@ class MemoryUsagePlot(SimplePlot):
                 ydata.append(d[1])
             self.axis.plot(xdata, ydata, label = "p {0}".format(process.id))
 
-        process = self.processes[0] #memory peak is measured only on first process
+        process = self.processes[0]
         mm = process.ctx.monitor_manager
-        mem_mon = mm.get_process_monitor(process.id, "MemoryMonitor")
+        mem_mon = mm.get_monitor("GlobalMemoryMonitor")
         if not mem_mon:
             return
-        data = mem_mon.collect([peak_entry])
+        data = mem_mon.collect([entry_name])
         xdata = []
         ydata = []
-        for d in data[peak_entry]:
+        for d in data[entry_name]:
             xdata.append(d[0])
             ydata.append(d[1])
         self.axis.plot(xdata, ydata, label = "memory peak")
+
+
+class StorageMemoryUsagePlot(SimplePlot):
+    def __init__(self, processes):
+        SimplePlot.__init__(self, "Storage memory usage", "time", "storage size")
+        self.processes = processes
+
+    def draw_plot(self):
+        entry_name = "changed"
+        for process in self.processes:
+            mm = process.ctx.monitor_manager
+            mem_mon = mm.get_process_monitor(process.id, "StorageMonitor")
+            if not mem_mon:
+                continue
+
+            data = mem_mon.collect([entry_name])
+            xdata = []
+            ydata = []
+            for d in data[entry_name]:
+                xdata.append(d[0])
+                ydata.append(d[1])
+            self.axis.plot(xdata, ydata, label = "p {0}".format(process.id))
+
+        pr = self.processes[0]
+        mm = pr.ctx.monitor_manager
+        gsm = mm.get_monitor("GlobalStorageMonitor")
+        if gsm:
+            data = gsm.collect([entry_name])
+            xdata = []
+            ydata = []
+            for d in data[entry_name]:
+                xdata.append(d[0])
+                ydata.append(d[1])
+            self.axis.plot(xdata, ydata, label = "memory peak")
 
 
 class ProcessesLifePlot(SimplePlot):
@@ -324,15 +356,24 @@ class DiscoveredPlot(SimplePlot):
             edge_mon = mm.get_process_monitor(p.id, "EdgeMonitor")
             if not edge_mon:
                 continue
-
-            data = edge_mon.collect(["edges_discovered_time"])
-            calc_data = data["edges_discovered_time"]
+            entry_name = "edges_discovered_in_time"
+            disc_cummulative_entry = "edges_discovered_cummulative"
+            data = edge_mon.collect([entry_name, disc_cummulative_entry])
+            disc_data = data[entry_name]
+            disc_cummulative_data = data[disc_cummulative_entry]
             xdata = []
             ydata = []
-            for sim_time, c in calc_data:
+            for sim_time, c in disc_data:
                 xdata.append(sim_time)
                 ydata.append(c)
             self.axis.plot(xdata, ydata, label = "p {0}".format(p.id))
+
+            xdata = []
+            ydata = []
+            for sim_time, s in disc_cummulative_data:
+                xdata.append(sim_time)
+                ydata.append(s)
+            self.axis.plot(xdata, ydata, label = "p {0} cummulative sum".format(p.id))
 
 
 class CalculatedPlot(SimplePlot):
@@ -350,8 +391,9 @@ class CalculatedPlot(SimplePlot):
             if not edge_mon:
                 continue
 
-            data = edge_mon.collect(["edge_calculated"])
-            calc_data = data["edge_calculated"]
+            entry_name = "edge_calculated"
+            data = edge_mon.collect([entry_name])
+            calc_data = data[entry_name]
             xdata = []
 
             for _, _, edge_time, _, _, _ in calc_data:
@@ -361,6 +403,8 @@ class CalculatedPlot(SimplePlot):
                 max_v = max(xdata)
                 if min_v == max_v:
                     bins = int(max_v)
+                    if bins == 0:
+                        bins = [0]
                 else:
                     bins = np.linspace(min_v, max_v, num_step)
             else:
@@ -372,15 +416,161 @@ class CalculatedPlot(SimplePlot):
         self.axis.legend(handles=legend, loc = "best")
 
 
+class ProcessMemoryUsagePlot(SimplePlot):
+    def __init__(self, process):
+        SimplePlot.__init__(self, "Memory usage", "time", "size")
+        self.process = process
+
+    def draw_plot(self):
+        mm = self.process.ctx.monitor_manager
+        mem_monitor = mm.get_process_monitor(self.process.id, "MemoryMonitor")
+        if mem_monitor:
+            self._memory_plots(mem_monitor)
+
+        storage_monitor = mm.get_process_monitor(self.process.id, "StorageMonitor")
+        if storage_monitor:
+            self._storage_memory_plot(storage_monitor)
+
+    def _memory_plots(self, mem_monitor):
+        mem_entry = "memory_usage"
+
+        data = mem_monitor.collect([mem_entry])
+        mem_data = data[mem_entry]
+
+        xdata = []
+        ydata = []
+        for time, size in mem_data:
+            xdata.append(time)
+            ydata.append(size)
+        self.axis.plot(xdata, ydata, label = "Memory")
+
+    def _storage_memory_plot(self, storage_monitor):
+        push_entry = "push"
+        pop_entry = "pop"
+        change_entry = "changed"
+        data = storage_monitor.collect([push_entry, pop_entry, change_entry])
+        push_data = data[push_entry]
+        pop_data = data[pop_entry]
+        change_data = data[change_entry]
+
+        xdata = []
+        ydata = []
+        for time, size in push_data:
+            xdata.append(time)
+            ydata.append(size)
+        self.axis.plot(xdata, ydata, label = "Push")
+
+        xdata = []
+        ydata = []
+        for time, size in pop_data:
+            xdata.append(time)
+            ydata.append(size)
+        self.axis.plot(xdata, ydata, label = "Pop")
+
+        xdata = []
+        ydata = []
+        for time, size in change_data:
+            xdata.append(time)
+            ydata.append(size)
+        self.axis.plot(xdata, ydata, label = "Storage memory")
+
+
+class ProcessCalculatedPlot(SimplePlot):
+    def __init__(self, process):
+        SimplePlot.__init__(self, "Calculated", "time", "edge time")
+        self.process = process
+
+    def draw_plot(self):
+        mm = self.process.ctx.monitor_manager
+        edge_monitor = mm.get_process_monitor(self.process.id, "EdgeMonitor")
+        calc_edge_entry = "edge_calculated"
+        data = edge_monitor.collect([calc_edge_entry])
+
+        xdata = []
+        ydata = []
+        for time, _, edge_time, _, _, _ in data[calc_edge_entry]:
+            xdata.append(time)
+            ydata.append(edge_time)
+
+        self.axis.vlines(xdata, [0], ydata, color = "g", label = "Calculating time")
+        if len(xdata) and len(ydata) > 0:
+            self.axis.set_xlim([0, xdata[-1] + 2])
+            self.axis.set_ylim([0, max(ydata)])
+
+
+class ProcessDiscoveredEdgesPlot(SimplePlot):
+    def __init__(self, process):
+        SimplePlot.__init__(self, "Discovered edges", "time", "edges count")
+        self.process = process
+
+    def draw_plot(self):
+        mm = self.process.ctx.monitor_manager
+        edge_monitor = mm.get_process_monitor(self.process.id, "EdgeMonitor")
+        disc_edge_time_entry = "edges_discovered_in_time"
+        disc_cummulative_entry = "edges_discovered_cummulative"
+
+        data = edge_monitor.collect([disc_edge_time_entry,
+                                     disc_cummulative_entry])
+        cummulative_data = data[disc_cummulative_entry]
+        disc_data = data[disc_edge_time_entry]
+        xdata = []
+        ydata = []
+        for sim_time, count in disc_data:
+            xdata.append(sim_time)
+            ydata.append(count)
+        self.axis.plot(xdata, ydata, label = "Discovered edges")
+
+        xdata = []
+        ydata = []
+        for sim_time, s in cummulative_data:
+            xdata.append(sim_time)
+            ydata.append(s)
+        self.axis.plot(xdata, ydata, label = "Cummulative sum")
+
+
+class ProcessCommunicationPlot(SimplePlot):
+    def __init__(self, process):
+        SimplePlot.__init__(self, "Process communication", "time", "message size")
+        self.process = process
+
+    def draw_plot(self):
+        mm = self.process.ctx.monitor_manager
+        com_monitor = mm.get_process_monitor(self.process.id, "CommunicationMonitor")
+        send_entry = "send"
+        receive_entry = "receive"
+        asend_entry = "async_send"
+        areceive_entry = "async_receive"
+        data = com_monitor.collect([send_entry,
+                                    receive_entry,
+                                    asend_entry,
+                                    areceive_entry])
+
+        color_cycler = color_pallete.new_color_cycler()
+        colors = []
+        for _ in xrange(len(self.process.ctx.processes)):
+            colors.append(next(color_cycler))
+
+        xdata = []
+        ydata = []
+        for sim_time, target_id, size in data[asend_entry]:
+            xdata.append(sim_time)
+            ydata.append(size)
+
+        self.axis.vlines(xdata, [0], ydata, color = colors[self.process.id], label = "async_send")
+        if len(xdata) and len(ydata) > 0:
+            self.axis.set_xlim([0, xdata[-1] + 2])
+            self.axis.set_ylim([0, max(ydata)])
+
+
 class ProcessPlot(AbstractMultiPlot):
     def __init__(self, process):
         AbstractMultiPlot.__init__(self)
         self.process = process
 
     def pre_process(self):
-        self.add_subplot(1, 1, 4, "simulation time", "storage size", "Memory usage")
-        self.add_subplot(2, 1, 4, "time", "edge time", "Calculated")
-        self.add_subplot(3, 1, 4, "simulation time", "edges count", "Discovered edges")
+        self.add_subplot(1, 1, 3, "simulation time", "storage size", "Memory usage")
+        self.add_subplot(2, 1, 3, "time", "edge time", "Calculated")
+        self.add_subplot(3, 1, 3, "simulation time", "edges count", "Discovered edges")
 
         AbstractMultiPlot.pre_process(self)
         for ax in self.get_figure().axes:
@@ -392,11 +582,14 @@ class ProcessPlot(AbstractMultiPlot):
         if mem_monitor:
             self._memory_plots(mem_monitor)
 
+        storage_monitor = mm.get_process_monitor(self.process.id, "StorageMonitor")
+        if storage_monitor:
+            self._storage_memory_plot(storage_monitor)
+
         edge_monitor = mm.get_process_monitor(self.process.id, "EdgeMonitor")
         if edge_monitor:
             self._edge_plots(edge_monitor)
 
-        
         AbstractMultiPlot.draw_plot(self)
 
     def get_title(self):
@@ -404,52 +597,62 @@ class ProcessPlot(AbstractMultiPlot):
 
     def _memory_plots(self, mem_monitor):
         axis = self.get_axis(1)
-        push_entry = "push_time"
-        pop_entry = "pop_time"
-        mem_entry = "storage_changed"
+        mem_entry = "memory_usage"
 
-        data = mem_monitor.collect([push_entry,
-                                    pop_entry,
-                                    mem_entry])
-
-        push_data = data[push_entry]
-        pop_data = data[pop_entry]
+        data = mem_monitor.collect([mem_entry])
         mem_data = data[mem_entry]
-
-        xdata = []
-        ydata = []
-        for _, time, size in push_data:
-            xdata.append(time)
-            ydata.append(size)
-
-        axis.plot(xdata, ydata, label = "Push")
-
-        xdata = []
-        ydata = []
-        for _, time, size in pop_data:
-            xdata.append(time)
-            ydata.append(size)
-
-        axis.plot(xdata, ydata, label = "Pop")
 
         xdata = []
         ydata = []
         for time, size in mem_data:
             xdata.append(time)
             ydata.append(size)
-
         axis.plot(xdata, ydata, label = "Memory")
+
+    def _storage_memory_plot(self, storage_monitor):
+        axis = self.get_axis(1)
+        push_entry = "push"
+        pop_entry = "pop"
+        change_entry = "changed"
+        data = storage_monitor.collect([push_entry, pop_entry, change_entry])
+        push_data = data[push_entry]
+        pop_data = data[pop_entry]
+        change_data = data[change_entry]
+
+        xdata = []
+        ydata = []
+        for time, size in push_data:
+            xdata.append(time)
+            ydata.append(size)
+        axis.plot(xdata, ydata, label = "Push")
+
+        xdata = []
+        ydata = []
+        for time, size in pop_data:
+            xdata.append(time)
+            ydata.append(size)
+        axis.plot(xdata, ydata, label = "Pop")
+
+        xdata = []
+        ydata = []
+        for time, size in change_data:
+            xdata.append(time)
+            ydata.append(size)
+        axis.plot(xdata, ydata, label = "Storage memory")
 
     def _edge_plots(self, edge_monitor):
         axis = self.get_axis(2)
         edge_axis = self.get_axis(3)
         calc_edge_entry = "edge_calculated"
-        disc_edge_time_entry = "edges_discovered_time"
+        disc_edge_time_entry = "edges_discovered_in_time"
+        disc_cummulative_entry = "edges_discovered_cummulative"
 
         data = edge_monitor.collect([calc_edge_entry,
-                                     disc_edge_time_entry])
+                                     disc_edge_time_entry,
+                                     disc_cummulative_entry])
 
         calc_data = data[calc_edge_entry]
+        cummulative_data = data[disc_cummulative_entry]
         xdata = []
         ydata = []
         for time, _, edge_time, _, _, _ in calc_data:
@@ -468,6 +671,15 @@ class ProcessPlot(AbstractMultiPlot):
             xdata.append(sim_time)
             ydata.append(count)
         edge_axis.plot(xdata, ydata, label = "Discovered edges")
+
+        xdata = []
+        ydata = []
+        for sim_time, s in cummulative_data:
+            xdata.append(sim_time)
+            ydata.append(s)
+        edge_axis.plot(xdata, ydata, label = "Cummulative sum")
+
+
 # end plot for simulation detail
 
 
@@ -638,7 +850,7 @@ class VizualSimPlotAnim(AnimPlot):
             mem_monitor = mm.get_process_monitor(p.id, "MemoryMonitor")
 
             if mem_monitor:
-                mem_entry = "storage_changed"
+                mem_entry = "memory_usage"
                 mem_data = mem_monitor.collect([mem_entry])
                 xdata = []
                 ydata = []
@@ -649,7 +861,7 @@ class VizualSimPlotAnim(AnimPlot):
 
             edge_monitor = mm.get_process_monitor(p.id, "EdgeMonitor")
             if edge_monitor:
-                edge_disc_time_entry = "edges_discovered_time"
+                edge_disc_time_entry = "edges_discovered_in_time"
                 edge_calc_entry = "edge_calculated"
                 edge_data = edge_monitor.collect([edge_calc_entry,
                                                   edge_disc_time_entry])

@@ -131,8 +131,10 @@ class ProjectTab(Tab):
             self.liststore[i][0] = not self.liststore[i][0]
 
         def on_alg_change(w):
-            desc = pf.process_factory.get_process_description(w.get_active_text())
-            self.alg_description.set_text(desc) 
+            active_text = w.get_active_text()
+            if active_text:
+                desc = pf.process_factory.get_process_description(active_text)
+                self.alg_description.set_text(desc) 
 
         self.toggle_render.connect("toggled", on_selected_toggle)
         self.add_button.connect("clicked", lambda w: self.add_graph_file())
@@ -182,6 +184,8 @@ class ProjectTab(Tab):
             return
         process_count = self.process_num_button.get_value_as_int()
         process_type = self.combobox.get_active_text()
+        if not process_type:
+            return
         sim_count = self.sim_num_button.get_value_as_int()
         remove_previous = self.remove_old_checkbutton.get_active()
         arguments = None
@@ -221,6 +225,8 @@ class ProjectTab(Tab):
 
         process_count = self.process_num_button.get_value_as_int()
         process_type = self.combobox.get_active_text()
+        if not process_type:
+            return
 
         max_nodes_count = settings.get("MAX_VISIBLE_GRAPH_NODES")
         for filename, nodes_count in lines:
@@ -271,34 +277,59 @@ class SimulationDetailTab(CloseTab):
         self.stats_vbox = self._create_statistics()
         self.notebook.append_page(self.stats_vbox, gtk.Label("Results"))
         self.create_plots()
-        pass
 
     def create_plots(self):
         def add_plot_page(widget, title):
             self.notebook.append_page(widget, gtk.Label(title))
             self.plots.append(widget.plot)
 
+        def add_process_plot_page(notebook, widget, title):
+            notebook.append_page(widget, gtk.Label(title))
+            self.plots.append(widget.plot)
+
         processes = self.simulation.ctx.processes
         memory_usage_plot = plot.MemoryUsagePlot(processes)
+        storage_usage_plot = plot.StorageMemoryUsagePlot(processes)
         processes_plot = plot.ProcessesLifePlot(processes)
         discovered_plot = plot.DiscoveredPlot(processes)
         calculated_plot = plot.CalculatedPlot(processes)
 
         add_plot_page(memory_usage_plot.get_widget_with_navbar(self.win),
                       memory_usage_plot.get_title())
+        add_plot_page(storage_usage_plot.get_widget_with_navbar(self.win),
+                      storage_usage_plot.get_title())
 
         add_plot_page(processes_plot.get_widget_with_navbar(self.win), processes_plot.get_title())
         add_plot_page(discovered_plot.get_widget_with_navbar(self.win), discovered_plot.get_title())
         add_plot_page(calculated_plot.get_widget_with_navbar(self.win), calculated_plot.get_title())
 
         for process in self.simulation.ctx.processes:
-            process_plot = plot.ProcessPlot(process)
-            add_plot_page(process_plot.get_widget_with_navbar(self.win), process_plot.get_title())
+            notebook = gtk.Notebook()
+            notebook.connect("switch-page", self.on_page_switch)
+
+            pr_mem_usage_plot = plot.ProcessMemoryUsagePlot(process)
+            pr_calc_edge_plot = plot.ProcessCalculatedPlot(process)
+            pr_disc_edge_plot = plot.ProcessDiscoveredEdgesPlot(process)
+            pr_com_plot = plot.ProcessCommunicationPlot(process)
+            add_process_plot_page(notebook,
+                                  pr_mem_usage_plot.get_widget_with_navbar(self.win),
+                                  pr_mem_usage_plot.get_title())
+            add_process_plot_page(notebook,
+                                  pr_calc_edge_plot.get_widget_with_navbar(self.win),
+                                  pr_calc_edge_plot.get_title())
+            add_process_plot_page(notebook,
+                                  pr_disc_edge_plot.get_widget_with_navbar(self.win),
+                                  pr_disc_edge_plot.get_title())
+            add_process_plot_page(notebook,
+                                  pr_com_plot.get_widget_with_navbar(self.win),
+                                  pr_com_plot.get_title())
+            self.notebook.append_page(notebook,
+                                      gtk.Label("Detail of process {0}".format(process.id)))
 
         self.notebook.connect("switch-page", self.on_page_switch)
 
     def on_page_switch(self, notebook, page, num):
-        new_tab = self.notebook.get_nth_page(num)
+        new_tab = notebook.get_nth_page(num)
         if new_tab and hasattr(new_tab, "plot"):
             new_tab.plot.draw()
 
@@ -623,6 +654,9 @@ class VisualSimulationTab(CloseTab):
     def init_canvas(self):
         canvas = Canvas()
         canvas.set_events(gtk.gdk.BUTTON_PRESS_MASK)
+        c = self.CANVAS_BACKGROUND_COLOR
+        canvas.modify_bg(gtk.STATE_NORMAL,
+                         gtk.gdk.Color(c[0] * 256,c[1] * 256,c[2] * 256))
         canvas.connect("configure_event", lambda w, e: self.redraw())
         canvas.connect("button_press_event", lambda w, e: self.on_mouse_click(e))
         graph = self.simulation.ctx.graph
@@ -714,10 +748,12 @@ class SettingsTab(CloseTab):
         general_settings = settings.GeneralSettingPage()
         simulation_settings = settings.SimulationSettingPage()
         visual_sim_settings = settings.VisualSimSettingPage()
+        scripts_settings = settings.ScriptSettingPage()
 
         add_setting_page(general_settings)
         add_setting_page(simulation_settings)
         add_setting_page(visual_sim_settings)
+        add_setting_page(scripts_settings)
         return hbox
 
     def is_project_independent(self):
@@ -875,11 +911,12 @@ class SimulationsTab(Tab):
         self.timer.stop()
         self.current_sim = None
         mm = simulation.ctx.monitor_manager
-        mem_monitor = mm.get_process_monitor(0, "MemoryMonitor")
+        mem_monitor = mm.get_monitor("GlobalMemoryMonitor")
         memory_peak = 0
         if mem_monitor:
-            data = mem_monitor.collect(["memory_peak"])
-            for _, storage_size in data["memory_peak"]:
+            mem_usage_entry = "memory_usage"
+            data = mem_monitor.collect([mem_usage_entry])
+            for _, storage_size in data[mem_usage_entry]:
                 if storage_size > memory_peak:
                     memory_peak = storage_size
 

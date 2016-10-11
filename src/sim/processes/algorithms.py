@@ -1,8 +1,8 @@
-import process
+from sim.processes import process
 import random as r
 
 
-class Algorithm1(process.GraphProcess):
+class Algorithm1(process.StorageProcess):
 
     NAME = "Algorithm 1"
     DESCRIPTION = "If process has more then 1 task to do, he try to send new \
@@ -10,7 +10,7 @@ task to another process which is waiting for work."
     PARAMS = {}
 
     def __init__(self, id, ctx):
-        process.GraphProcess.__init__(self, id, self.NAME, ctx, process.QueueStorage())
+        process.StorageProcess.__init__(self, id, self.NAME, ctx, process.QueueStorage(self))
 
     def init(self):
         if self.get_id() == 0:
@@ -20,6 +20,7 @@ task to another process which is waiting for work."
 
     def run(self):
         gs = self.ctx.graph_stats
+
         while True:
             self.clock.tick()
             if self.storage.get_size() > 0:
@@ -28,7 +29,7 @@ task to another process which is waiting for work."
                     found = False
                     for p in self.ctx.processes:
                         if p.storage.get_size() == 0:
-                            self.communicator.isend(node, p.id)
+                            self.communicator.async_send(node, p.id)
                             found = True
                             break
                     if found:
@@ -45,7 +46,7 @@ task to another process which is waiting for work."
                 yield self.wait()
 
 
-class Algorithm2(process.GraphProcess):
+class Algorithm2(process.StorageProcess):
 
     NAME = "SpinProcess"
     DESCRIPTION = "Spin process uses 'partition' function which deside where the process \
@@ -53,7 +54,7 @@ send new task."
     PARAMS = {}
 
     def __init__(self, id, ctx):
-        process.GraphProcess.__init__(self, id, self.NAME, ctx, process.StackStorage())
+        process.StorageProcess.__init__(self, id, self.NAME, ctx, process.StackStorage(self))
 
     def init(self):
         if self.get_id() == 0:
@@ -68,7 +69,6 @@ send new task."
                 node = self.storage.get()
                 if not gs.is_node_discovered(node.id):
                     gs.discover_node(node.id, self.id)
-
                     for edge in node.get_edges():
                         yield self.solve_edge(edge)
                         new_node = edge.get_target()
@@ -78,7 +78,7 @@ send new task."
                         else:
                             processes = self.ctx.processes
                             p = processes[i]
-                            self.communicator.isend(new_node, p.id)
+                            self.communicator.async_send(new_node, p.id)
             else:
                 yield self.wait()
 
@@ -89,14 +89,14 @@ send new task."
         return 0
 
 
-class Algorithm3(process.GraphProcess):
+class Algorithm3(process.StorageProcess):
 
     NAME = "Alg 3"
     DESCRIPTION = "Sending new node to next process"
     PARAMS = {}
 
     def __init__(self, id, ctx):
-        process.GraphProcess.__init__(self, id, self.NAME, ctx, process.QueueStorage())
+        process.StorageProcess.__init__(self, id, self.NAME, ctx, process.QueueStorage(self))
 
     def init(self):
         if self.get_id() == 0:
@@ -117,7 +117,7 @@ class Algorithm3(process.GraphProcess):
                     if not gs.is_node_discovered(new_node.id):
                         next = self.id + 1 % process_count
                         if next != self.id:
-                            self.communicator.isend(new_node, next)
+                            self.communicator.async_send(new_node, next)
                             gs.discover_node(new_node.id, next)
                         else:
                             gs.discover_node(new_node.id, self.id)
@@ -126,14 +126,17 @@ class Algorithm3(process.GraphProcess):
                 yield self.wait()
 
 
-class PingPongExample(process.GraphProcess):
+class PingPongExample(process.StorageProcess):
 
     NAME = "PingPong"
     DESCRIPTION = "Example of using blocking 'send' and 'receive' message in process"
     PARAMS = {}
 
     def __init__(self, id, ctx):
-        process.GraphProcess.__init__(self, id, self.NAME, ctx, process.QueueStorage())
+        process.StorageProcess.__init__(self, id, self.NAME, ctx, process.QueueStorage(self))
+
+    def init(self):
+        pass
 
     def run(self):
         process_count = len(self.ctx.processes)
