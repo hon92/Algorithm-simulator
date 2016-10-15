@@ -34,6 +34,12 @@ class ProcessFactory():
             raise Exception("Invalid process name")
         return p.DESCRIPTION
 
+    def get_process_parameters(self, name):
+        p = self._get_process(name)
+        if not p:
+            raise Exception("Invalid process name")
+        return p.PARAMS
+
     def create_process(self, id, ctx, name):
         process_class = self._get_process(name)
         if not process_class:

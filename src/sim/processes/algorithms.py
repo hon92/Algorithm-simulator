@@ -5,9 +5,9 @@ import random as r
 class Algorithm1(process.StorageProcess):
 
     NAME = "Algorithm 1"
-    DESCRIPTION = "If process has more then 1 task to do, he try to send new \
+    DESCRIPTION = "If process has more then 'busy_task_count' task to do, he try to send new \
 task to another process which is waiting for work."
-    PARAMS = {}
+    PARAMS = {"busy_task_count": (1, int)}
 
     def __init__(self, id, ctx):
         process.StorageProcess.__init__(self, id, self.NAME, ctx, process.QueueStorage(self))
@@ -25,7 +25,7 @@ task to another process which is waiting for work."
             self.clock.tick()
             if self.storage.get_size() > 0:
                 node = self.storage.get()
-                if self.storage.get_size() > 1:
+                if self.storage.get_size() > self.ctx.arguments["busy_task_count"]:
                     found = False
                     for p in self.ctx.processes:
                         if p.storage.get_size() == 0:

@@ -149,6 +149,17 @@ class SimulationStatistics(Statistics):
                                "Algorithm",
                                process_type,
                                "Algorithm which was used for simulation"))
+        param_prop = self.add_prop(Property(i,
+                                            "Algorithm parameters",
+                                            "",
+                                            "Parameters available in algorithm"))
+
+        for arg_name, arg_val in ctx.arguments.iteritems():
+            self.add_prop(Property(param_prop,
+                                   arg_name,
+                                   str(arg_val),
+                                   "'{0}' algorithm parameter".format(arg_name)))
+
         self.add_prop(Property(i,
                                "Process count",
                                process_count,

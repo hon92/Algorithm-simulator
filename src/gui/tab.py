@@ -102,6 +102,7 @@ class ProjectTab(Tab):
         Tab.__init__(self, window, "Project")
         self.project = project
         self.win.set_title(project.get_name())
+        self.params = []
 
     def build(self):
         builder = gl.GladeLoader("project_tab").load()
@@ -119,6 +120,7 @@ class ProjectTab(Tab):
         self.sim_num_button = builder.get_object("sim_num_button")
         self.alg_description = builder.get_object("alg_description")
         self.remove_old_checkbutton = builder.get_object("remove_old_checkbutton")
+        self.parameters_box = builder.get_object("parameters_vbox")
         return self.box
 
     def post_build(self):
@@ -130,11 +132,38 @@ class ProjectTab(Tab):
         def on_selected_toggle(w, i):
             self.liststore[i][0] = not self.liststore[i][0]
 
+        def show_params(params):
+            self.params = []
+            def rm(w):
+                self.parameters_box.remove(w)
+            self.parameters_box.foreach(rm)
+
+            if len(params) == 0:
+                hb = gtk.HBox()
+                hb.pack_start(gtk.Label("No parameters"))
+                self.parameters_box.pack_start(hb)
+                self.parameters_box.show_all()
+                return
+
+            for param, val in params.iteritems():
+                v = val[0]
+                p_type = val[1]
+                hbox = gtk.HBox()
+                hbox.pack_start(gtk.Label(param))
+                entry = gtk.Entry()
+                entry.set_text(str(v))
+                hbox.pack_start(entry)
+                hbox.show_all()
+                self.parameters_box.pack_start(hbox)
+                self.params.append((param, entry, p_type))
+
         def on_alg_change(w):
             active_text = w.get_active_text()
             if active_text:
                 desc = pf.process_factory.get_process_description(active_text)
-                self.alg_description.set_text(desc) 
+                params = pf.process_factory.get_process_parameters(active_text)
+                show_params(params)
+                self.alg_description.set_text(desc)
 
         self.toggle_render.connect("toggled", on_selected_toggle)
         self.add_button.connect("clicked", lambda w: self.add_graph_file())
@@ -188,7 +217,16 @@ class ProjectTab(Tab):
             return
         sim_count = self.sim_num_button.get_value_as_int()
         remove_previous = self.remove_old_checkbutton.get_active()
-        arguments = None
+        arguments = {}
+        try:
+            for param_key, param_entry, p_type in self.params:
+                val = p_type(param_entry.get_text())
+                arguments[param_key] = val
+        except Exception as ex:
+            err_msg = "Algorithm parameter type error: {0}".format(ex.message)
+            self.win.console.writeln(err_msg, "err")
+            return
+
         self.run_simulations(files,
                             process_type,
                             process_count,
@@ -228,6 +266,16 @@ class ProjectTab(Tab):
         if not process_type:
             return
 
+        arguments = {}
+        try:
+            for param_key, param_entry, p_type in self.params:
+                val = p_type(param_entry.get_text())
+                arguments[param_key] = val
+        except Exception as ex:
+            err_msg = "Algorithm parameter type error: {0}".format(ex.message)
+            self.win.console.writeln(err_msg, "err")
+            return
+
         max_nodes_count = settings.get("MAX_VISIBLE_GRAPH_NODES")
         for filename, nodes_count in lines:
             if nodes_count > max_nodes_count:
@@ -236,12 +284,13 @@ class ProjectTab(Tab):
                 err_text = err_text.format(filename, str(max_nodes_count))
                 self.win.console.writeln(err_text, "err")
                 continue
-            self.run_visual_simulation(filename, process_type, process_count)
+            self.run_visual_simulation(filename, process_type, process_count, arguments)
 
     def run_visual_simulation(self,
                               filename,
                               process_type,
-                              process_count):
+                              process_count,
+                              arguments = None):
         CANVAS_MAX_SIZE = 5000
         name = ntpath.basename(filename)
         title = "{0} - {1}({2})".format(name, process_type, process_count)
@@ -253,7 +302,7 @@ class ProjectTab(Tab):
             self.win.console.writeln(err_text, "err")
             return
 
-        sim = simulation.VisualSimulation(process_type, process_count, graph)
+        sim = simulation.VisualSimulation(process_type, process_count, graph, arguments)
         self.win.create_tab(VisualSimulationTab(self.win,
                                                 title,
                                                 sim))
