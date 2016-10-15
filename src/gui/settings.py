@@ -2,6 +2,7 @@ import paths
 import os
 import ntpath
 import gtk
+import sys
 import gladeloader as gl
 from misc import utils
 from xml.etree.cElementTree import Element, SubElement, parse
@@ -48,7 +49,12 @@ user_scripts = []
 def init():
     config_file = get_config_file()
     if config_file_exists():
-        _load_settings(config_file)
+        try:
+            _load_settings(config_file)
+        except Exception as ex:
+            err_msg = "Config file load error: {0}".format(ex.message)
+            print err_msg
+            sys.exit(1)
     else:
         _save_settings(config_file)
 
