@@ -119,10 +119,7 @@ class GraphProcess(Process):
 
     def solve_edge(self, edge):
         gs = self.ctx.graph_stats
-        gs.discover_edge(edge.source.id,
-                         edge.target.id,
-                         edge.label,
-                         self.id)
+        gs.discover_edge(edge, self)
         self.fire("edge_discovered",
                   self.ctx.env.now,
                   self.id,
@@ -133,10 +130,7 @@ class GraphProcess(Process):
 
         def edge_gen():
             yield self.wait(edge.get_time())
-            gs.calculate_edge(edge.source.id,
-                              edge.target.id,
-                              edge.label,
-                              self.id)
+            gs.calculate_edge(edge, self)
             self.fire("edge_calculated",
                       self.ctx.env.now,
                       self.id,

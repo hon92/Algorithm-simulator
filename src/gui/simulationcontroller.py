@@ -189,9 +189,9 @@ class SimulationController():
             stats.update_prop(attr.format("memory_peak"),
                               p.storage.get_memory_peak())
 
-            nodes_discovered = gs.get_discovered_nodes_by_process(p.id)
-            edges_discovered = gs.get_discovered_edges_by_process(p.id)
-            edges_calculated = gs.get_calculated_edges_by_process(p.id)
+            nodes_discovered = gs.get_discovered_nodes_by_process(p)
+            edges_discovered = gs.get_discovered_edges_by_process(p)
+            edges_calculated = gs.get_calculated_edges_by_process(p)
             stats.update_prop(attr.format("discovered_nodes"), nodes_discovered)
             stats.update_prop(attr.format("discovered_edges"), edges_discovered)
             stats.update_prop(attr.format("calculated_edges"), edges_calculated)

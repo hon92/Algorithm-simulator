@@ -12,47 +12,57 @@ class GraphStats():
         self.discovered_edges = {} # key-> edge id, value -> list of discoverers
         self.calculated_edges = {} # key-> edge id, value -> list of completers
 
-    def discover_node(self, node_id, process_id):
-        discoverers = self.discovered_nodes.get(node_id)
+    def discover_node(self, node, process):
+        discoverers = self.discovered_nodes.get(node.get_id())
         if discoverers:
-            discoverers.append(process_id)
+            discoverers.append(process.get_id())
         else:
-            self.discovered_nodes[node_id] = [process_id]
+            self.discovered_nodes[node.get_id()] = [process.get_id()]
         self.undiscovered_nodes_count -= 1
 
-    def discover_edge(self, source_node_id, target_node_id, label, process_id):
-        discoverers = self.discovered_edges.get((source_node_id, target_node_id, label))
+    def discover_edge(self, edge, process):
+        source = edge.get_source().get_id()
+        target = edge.get_target().get_id()
+        label = edge.get_label()
+        discoverers = self.discovered_edges.get((source, target, label))
         if discoverers:
-            discoverers.append(process_id)
+            discoverers.append(process.get_id())
         else:
-            self.discovered_edges[(source_node_id, target_node_id, label)] = [process_id]
+            self.discovered_edges[(source, target, label)] = [process.get_id()]
         self.undiscovered_edges_count -= 1
 
-    def calculate_edge(self, source_node_id, target_node_id, label, process_id):
-        calculators = self.calculated_edges.get((source_node_id, target_node_id, label))
+    def calculate_edge(self, edge, process):
+        source = edge.get_source().get_id()
+        target = edge.get_target().get_id()
+        label = edge.get_label()
+        calculators = self.calculated_edges.get((source, target, label))
         if calculators:
-            calculators.append(process_id)
+            calculators.append(process.get_id())
         else:
-            self.calculated_edges[(source_node_id, target_node_id, label)] = [process_id]
+            self.calculated_edges[(source, target, label)] = [process.get_id()]
         self.calculated_edges_count += 1
 
-    def is_node_discovered(self, node_id):
-        return node_id in self.discovered_nodes
+    def is_node_discovered(self, node):
+        return node.get_id() in self.discovered_nodes
 
-    def is_edge_discovered(self, source_node_id, target_node_id, label):
-        return (source_node_id, target_node_id, label) in self.discovered_edges
+    def is_edge_discovered(self, edge):
+        edge_info = self._get_edge_info(edge)
+        return edge_info in self.discovered_edges
 
-    def is_edge_calculated(self, source_node_id, target_node_id, label):
-        return (source_node_id, target_node_id, label) in self.calculated_edges
+    def is_edge_calculated(self, edge):
+        edge_info = self._get_edge_info(edge)
+        return edge_info in self.calculated_edges
 
-    def get_node_discoverer(self, node_id):
-        return self.discovered_nodes.get(node_id)
+    def get_node_discoverer(self, node):
+        return self.discovered_nodes.get(node.get_id())
 
-    def get_edge_discoverer(self, source_node_id, target_node_id, label):
-        return self.discovered_edges.get((source_node_id, target_node_id, label))
+    def get_edge_discoverer(self, edge):
+        edge_info = self._get_edge_info(edge)
+        return self.discovered_edges.get(edge_info)
 
-    def get_edge_calculator(self, source_node_id, target_node_id, label):
-        return self.calculated_edges.get((source_node_id, target_node_id, label))
+    def get_edge_calculator(self, edge):
+        edge_info = self._get_edge_info(edge)
+        return self.calculated_edges.get(edge_info)
 
     def get_nodes_count(self):
         return self.nodes_count
@@ -75,14 +85,14 @@ class GraphStats():
     def get_calculated_edges_count(self):
         return self.calculated_edges_count
 
-    def get_discovered_nodes_by_process(self, process_id):
-        return self._count_by_process_id(process_id, self.discovered_nodes)
+    def get_discovered_nodes_by_process(self, process):
+        return self._count_by_process_id(process, self.discovered_nodes)
 
-    def get_discovered_edges_by_process(self, process_id):
-        return self._count_by_process_id(process_id, self.discovered_edges)
+    def get_discovered_edges_by_process(self, process):
+        return self._count_by_process_id(process, self.discovered_edges)
 
-    def get_calculated_edges_by_process(self, process_id):
-        return self._count_by_process_id(process_id, self.calculated_edges)
+    def get_calculated_edges_by_process(self, process):
+        return self._count_by_process_id(process, self.calculated_edges)
 
     def reset(self):
         self.undiscovered_nodes_count = self.nodes_count
@@ -92,12 +102,18 @@ class GraphStats():
         self.calculated_edges = {}
         self.discovered_edges = {}
 
-    def _count_by_process_id(self, process_id, dictionary):
+    def _count_by_process_id(self, process, dictionary):
         c = 0
         for _, v in dictionary.iteritems():
-            if process_id in v:
+            if process.get_id() in v:
                 c += 1
         return c
+
+    def _get_edge_info(self, edge):
+        source = edge.get_source().get_id()
+        target = edge.get_target().get_id()
+        label = edge.get_label()
+        return (source, target, label)
 
 
 class VisualGraphStats(GraphStats):
@@ -126,16 +142,17 @@ class VisualGraphStats(GraphStats):
         for _ in xrange(self.colors_count):
             self.colors.append(utils.hex_to_rgb(next(cc)))
 
-    def set_selected_node(self, node_id):
-        self.selected_node_id = node_id
+    def set_selected_node(self, node):
+        self.selected_node_id = node.get_id()
 
-    def set_edge_visibility(self, source_node_id, target_node_id, label, val):
+    def set_edge_visibility(self, edge, val):
+        edge_info = self._get_edge_info(edge)
         if val:
-            if not (source_node_id, target_node_id, label) in self.visible_edges:
-                self.visible_edges[(source_node_id, target_node_id, label)] = True
+            if not edge_info in self.visible_edges:
+                self.visible_edges[edge_info] = True
         else:
-            if (source_node_id, target_node_id, label) in self.visible_edges:
-                del self.visible_edges[(source_node_id, target_node_id, label)]
+            if edge_info in self.visible_edges:
+                del self.visible_edges[edge_info]
 
     def reset(self):
         GraphStats.reset(self)
@@ -143,17 +160,18 @@ class VisualGraphStats(GraphStats):
         self.visible_edges = {}
         self.selected_node_id = None
 
-    def is_node_visible(self, node_id):
-        return self.is_node_discovered(node_id)
+    def is_node_visible(self, node):
+        return self.is_node_discovered(node)
 
-    def is_edge_visible(self, source_node_id, target_node_id, label):
-        return (source_node_id, target_node_id, label) in self.visible_edges
+    def is_edge_visible(self, edge):
+        edge_info = self._get_edge_info(edge)
+        return edge_info in self.visible_edges
 
-    def is_selected_node(self, node_id):
-        return self.selected_node_id and self.selected_node_id == node_id
+    def is_selected_node(self, node):
+        return self.selected_node_id and self.selected_node_id == node.get_id()
 
-    def get_node_color(self, node_id):
-        discoverer = self.get_node_discoverer(node_id)
+    def get_node_color(self, node):
+        discoverer = self.get_node_discoverer(node)
         if discoverer is not None:
             if len(discoverer) > 1:
                 return self.MULTI_DISCOVERERS_NODE_COLOR
@@ -164,20 +182,20 @@ class VisualGraphStats(GraphStats):
     def get_inverted_color(self, color):
         return utils.get_inverted_color(color)
 
-    def get_edge_color(self, source_node_id, target_node_id, label):
-        completers = self.get_edge_calculator(source_node_id, target_node_id, label)
+    def get_edge_color(self, edge):
+        completers = self.get_edge_calculator(edge)
         if completers is not None:
             if len(completers) > 1:
                 return self.MULTI_CALCULATORS_EDGE_COLOR
             return self.colors[completers[0]]
 
-        discoverer = self.get_edge_discoverer(source_node_id, target_node_id, label)
+        discoverer = self.get_edge_discoverer(edge)
         if discoverer is not None:
             if len(discoverer) > 1:
                 return self.MULTI_DISCOVERERS_EDGE_COLOR
             return self.colors[discoverer[0]]
 
-        if self.is_edge_visible(source_node_id, target_node_id, label):
+        if self.is_edge_visible(edge):
             return self.VISIBLE_EDGE_COLOR
         else:
             return self.UNVISIBLE_EDGE_COLOR

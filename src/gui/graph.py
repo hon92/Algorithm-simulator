@@ -120,7 +120,7 @@ class VisibleNode(Node):
         self.height = height
 
     def draw(self, canvas, vis_graph_stats):
-        color = vis_graph_stats.get_node_color(self.id)
+        color = vis_graph_stats.get_node_color(self)
         canvas.set_color(*color)
         canvas.draw_rectangle(self.x,
                               self.y,
@@ -134,16 +134,14 @@ class VisibleNode(Node):
                                   self.y + self.height / 2,
                                   "id:{0}".format(self.id, self.get_size()))
 
-        if vis_graph_stats.is_selected_node(self.id):
+        if vis_graph_stats.is_selected_node(self):
             canvas.draw_rectangle(self.x - 1,
                                   self.y - 1,
                                   self.width + 1,
                                   self.height + 1)
         for e in self.get_edges():
-            if vis_graph_stats.is_node_visible(e.get_target().get_id()):
-                vis_graph_stats.set_edge_visibility(e.source.id,
-                                                    e.target.id,
-                                                    e.label, vis_graph_stats.is_node_visible(self.id))
+            if vis_graph_stats.is_node_visible(e.get_target()):
+                vis_graph_stats.set_edge_visibility(e, vis_graph_stats.is_node_visible(self))
             e.draw(canvas, vis_graph_stats)
 
 
@@ -158,14 +156,13 @@ class VisibleEdge(Edge):
         self.arrow_polygon = arrow_polygon
 
     def draw(self, canvas, vis_graph_stats):
-        edge_id = (self.source.id, self.target.id, self.label)
-        edge_color = vis_graph_stats.get_edge_color(*edge_id)
+        edge_color = vis_graph_stats.get_edge_color(self)
         arrow_color = vis_graph_stats.get_edge_arrow_color()
-        is_discovered = vis_graph_stats.is_edge_discovered(*edge_id)
-        is_completed = vis_graph_stats.is_edge_calculated(*edge_id)
+        is_discovered = vis_graph_stats.is_edge_discovered(self)
+        is_completed = vis_graph_stats.is_edge_calculated(self)
         dashed =  is_discovered and not is_completed
-        discoverer = vis_graph_stats.get_edge_discoverer(*edge_id)
-        completer = vis_graph_stats.get_edge_calculator(*edge_id)
+        discoverer = vis_graph_stats.get_edge_discoverer(self)
+        completer = vis_graph_stats.get_edge_calculator(self)
 
         if discoverer is None:
             discoverer = -1
@@ -175,7 +172,7 @@ class VisibleEdge(Edge):
         if dashed:
             dashed = "dash"
 
-        discoverers = vis_graph_stats.get_edge_discoverer(*edge_id)
+        discoverers = vis_graph_stats.get_edge_discoverer(self)
         if discoverers and len(discoverers) > 1:
             dashed = "dots"
 

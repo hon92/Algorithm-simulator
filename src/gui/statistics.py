@@ -210,9 +210,9 @@ class SimulationStatistics(Statistics):
                     memory_peak = size
 
             waiting_time = self.simulation.ctx.env.now - time
-            nodes_discovered = gs.get_discovered_nodes_by_process(pr.id)
-            edges_discovered = gs.get_discovered_edges_by_process(pr.id)
-            edges_calculated = gs.get_calculated_edges_by_process(pr.id)
+            nodes_discovered = gs.get_discovered_nodes_by_process(pr)
+            edges_discovered = gs.get_discovered_edges_by_process(pr)
+            edges_calculated = gs.get_calculated_edges_by_process(pr)
 
             i = self.add_prop(Property(pi,
                                        "Process",

@@ -16,7 +16,7 @@ task to another process which is waiting for work."
         if self.get_id() == 0:
             root = self.ctx.graph.get_root()
             self.storage.put(root)
-            self.ctx.graph_stats.discover_node(root.get_id(), 0)
+            self.ctx.graph_stats.discover_node(root, self)
 
     def run(self):
         gs = self.ctx.graph_stats
@@ -38,9 +38,9 @@ task to another process which is waiting for work."
                 for edge in node.get_edges():
                     yield self.solve_edge(edge)
                     new_node = edge.get_target()
-                    if gs.is_node_discovered(new_node.get_id()):
+                    if gs.is_node_discovered(new_node):
                         continue
-                    gs.discover_node(new_node.get_id(), self.id)
+                    gs.discover_node(new_node, self)
                     self.storage.put(new_node)
             else:
                 yield self.wait()
@@ -67,8 +67,8 @@ send new task."
             self.clock.tick()
             if self.storage.get_size() > 0:
                 node = self.storage.get()
-                if not gs.is_node_discovered(node.id):
-                    gs.discover_node(node.id, self.id)
+                if not gs.is_node_discovered(node):
+                    gs.discover_node(node, self)
                     for edge in node.get_edges():
                         yield self.solve_edge(edge)
                         new_node = edge.get_target()
@@ -102,7 +102,7 @@ class Algorithm3(process.StorageProcess):
         if self.get_id() == 0:
             root = self.ctx.graph.get_root()
             self.storage.put(root)
-            self.ctx.graph_stats.discover_node(root.get_id(), self.get_id())
+            self.ctx.graph_stats.discover_node(root, self)
 
     def run(self):
         process_count = len(self.ctx.processes)
@@ -114,13 +114,14 @@ class Algorithm3(process.StorageProcess):
                 for edge in node.get_edges():
                     yield self.solve_edge(edge)
                     new_node = edge.get_target()
-                    if not gs.is_node_discovered(new_node.id):
+                    if not gs.is_node_discovered(new_node):
                         next = self.id + 1 % process_count
                         if next != self.id:
                             self.communicator.async_send(new_node, next)
-                            gs.discover_node(new_node.id, next)
+                            pr = self.ctx.processes[next]
+                            gs.discover_node(new_node, pr)
                         else:
-                            gs.discover_node(new_node.id, self.id)
+                            gs.discover_node(new_node, self)
                         self.storage.put(new_node)
             else:
                 yield self.wait()
