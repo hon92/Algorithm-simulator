@@ -239,20 +239,44 @@ class Communicator(EventSource):
 
     def receive_now(self, target, tag = None):
         ctx = self.process.ctx
-        if target < 0 or target >= len(ctx.processes):
-            raise Exception("Unknown source for receive message")
+
+        def target_check(t):
+            if t < 0 or t >= len(ctx.processes):
+                raise Exception("Unknown source for receive message")
 
         def match(msg):
             return self._check_msg(msg.source, msg.tag, target, tag)
 
-        evt = self._msg_store.get(match)
+        def multi_match(msg):
+            for t in target:
+                m = self._check_msg(msg.source,
+                                    msg.tag,
+                                    t,
+                                    None)
+                if m:
+                    return True
+            return False
+
+        if type(target) is list:
+            for t in target:
+                target_check(t)
+            evt = self._msg_store.get(multi_match)
+        else:
+            evt = self._msg_store.get(match)
+
         if evt.triggered:
             return evt.value
         else:
             return None
 
-    def get_n_messages(self):
-        return len(self._msg_store.items)
+    def get_n_messages(self, pids = None):
+        if pids is None:
+            return len(self._msg_store.items)
+        count = 0
+        for msg in self._msg_store.items:
+            if msg.source in pids:
+                count += 1
+        return count
 
 
 class Clock(EventSource):
