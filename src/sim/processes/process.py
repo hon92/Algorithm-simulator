@@ -237,7 +237,7 @@ class Communicator(EventSource):
             evt.callbacks.append(lambda e: self.fire("receive", evt.value))
         return evt
 
-    def receive_now(self, target, tag = None):
+    def receive_now(self, target = None, tag = None):
         ctx = self.process.ctx
 
         def target_check(t):
@@ -257,12 +257,17 @@ class Communicator(EventSource):
                     return True
             return False
 
+        def any(msg):
+            return True
+
         if type(target) is list:
             for t in target:
                 target_check(t)
             evt = self._msg_store.get(multi_match)
-        else:
+        elif target:
             evt = self._msg_store.get(match)
+        else:
+            evt = self._msg_store.get(any)
 
         if evt.triggered:
             return evt.value
