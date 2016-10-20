@@ -222,13 +222,13 @@ class Communicator(EventSource):
             self.fire("send", evt.item)
         return evt
 
-    def receive(self, target, tag = None):
+    def receive(self, source, tag = None):
         ctx = self.process.ctx
-        if target < 0 or target >= len(ctx.processes):
+        if source < 0 or source >= len(ctx.processes):
             raise Exception("Unknown source for receive message")
 
         def match(msg):
-            return self._check_msg(msg.source, msg.tag, target, tag)
+            return self._check_msg(msg.source, msg.tag, source, tag)
 
         evt = self._msg_store.get(match)
         if evt.triggered:
@@ -237,7 +237,7 @@ class Communicator(EventSource):
             evt.callbacks.append(lambda e: self.fire("receive", evt.value))
         return evt
 
-    def receive_now(self, target = None, tag = None):
+    def receive_now(self, source = None, tag = None):
         ctx = self.process.ctx
 
         def target_check(t):
@@ -245,13 +245,13 @@ class Communicator(EventSource):
                 raise Exception("Unknown source for receive message")
 
         def match(msg):
-            return self._check_msg(msg.source, msg.tag, target, tag)
+            return self._check_msg(msg.source, msg.tag, source, tag)
 
         def multi_match(msg):
-            for t in target:
+            for s in source:
                 m = self._check_msg(msg.source,
                                     msg.tag,
-                                    t,
+                                    s,
                                     None)
                 if m:
                     return True
@@ -260,11 +260,11 @@ class Communicator(EventSource):
         def any(msg):
             return True
 
-        if type(target) is list:
-            for t in target:
-                target_check(t)
+        if type(source) is list:
+            for s in source:
+                target_check(s)
             evt = self._msg_store.get(multi_match)
-        elif target:
+        elif source:
             evt = self._msg_store.get(match)
         else:
             evt = self._msg_store.get(any)
