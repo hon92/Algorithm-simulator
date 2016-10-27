@@ -257,6 +257,7 @@ class EdgeMonitor(Monitor):
                        "simulation_time",
                        "process_id",
                        "edge_time",
+                       "calculating_time",
                        "edge_label",
                        "source_node_id",
                        "target_node_id")
@@ -294,12 +295,14 @@ class EdgeMonitor(Monitor):
                            sim_time,
                            process_id,
                            edge_time,
+                           calculating_time,
                            edge_label,
                            source_node_id,
                            target_node_id):
         self.put("edge_calculated", (sim_time,
                                      process_id,
                                      edge_time,
+                                     calculating_time,
                                      edge_label,
                                      source_node_id,
                                      target_node_id))
@@ -316,7 +319,8 @@ class CommunicationMonitor(Monitor):
         self.add_entry("send",
                        "simulation_time",
                        "target_process_id",
-                       "size")
+                       "size",
+                       "send_time")
         self.add_entry("receive",
                        "simulation_time",
                        "source_process_id",
@@ -324,7 +328,8 @@ class CommunicationMonitor(Monitor):
         self.add_entry("async_send",
                        "simulation_time",
                        "target_process_id",
-                       "size")
+                       "size",
+                       "send_time")
         self.add_entry("async_receive",
                        "simulation_time",
                        "source_process_id",
@@ -334,11 +339,12 @@ class CommunicationMonitor(Monitor):
         process.communicator.connect("async_send", self.on_async_send)
         process.communicator.connect("async_receive", self.on_async_receive)
 
-    def on_send(self, msg):
+    def on_send(self, msg, send_time):
         self.put("send",
                  (self.process.clock.get_simulation_time(),
                   msg.target,
-                  msg.size))
+                  msg.size,
+                  send_time))
 
     def on_receive(self, msg):
         self.put("receive",
@@ -346,11 +352,12 @@ class CommunicationMonitor(Monitor):
                   msg.source,
                   msg.size))
 
-    def on_async_send(self, msg):
+    def on_async_send(self, msg, send_time):
         self.put("async_send",
                  (self.process.clock.get_simulation_time(),
                   msg.target,
-                  msg.size))
+                  msg.size,
+                  send_time))
 
     def on_async_receive(self, msg):
         self.put("async_receive",

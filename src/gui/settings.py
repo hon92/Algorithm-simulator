@@ -292,7 +292,7 @@ class ScriptSettingPage(SettingPage):
         return vbox
 
     def on_apply(self):
-        scripts_paths = pf.process_factory.get_scripts_paths()
+        scripts_paths = pf.process_factory.get_scripts()
         global user_scripts
         user_scripts = scripts_paths
 
@@ -309,10 +309,8 @@ class ScriptSettingPage(SettingPage):
             try:
                 pf.process_factory.load_from_script(python_script)
                 self._load_scripts()
-            except RuntimeError as ex:
-                print ex.message
-            except Exception as ex:
-                print ex.message
+            except (SystemExit, Exception) as ex:
+                print ex
 
     def on_remove_script(self, w):
         iter = self._get_selected_row_iter()
@@ -323,7 +321,7 @@ class ScriptSettingPage(SettingPage):
 
     def _load_scripts(self):
         self.liststore.clear()
-        for script in pf.process_factory.get_scripts_paths():
+        for script in pf.process_factory.get_scripts():
             self.liststore.append([ntpath.basename(script), script])
 
     def _get_selected_row_iter(self):

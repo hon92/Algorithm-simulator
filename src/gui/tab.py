@@ -103,6 +103,8 @@ class ProjectTab(Tab):
         self.project = project
         self.win.set_title(project.get_name())
         self.params = []
+        pf.process_factory.connect("algorithm_added", self._on_algorithm_added)
+        pf.process_factory.connect("algorithm_remove", self._on_algorithm_remove)
 
     def build(self):
         builder = gl.GladeLoader("project_tab").load()
@@ -116,6 +118,7 @@ class ProjectTab(Tab):
         self.sim_button = builder.get_object("run_sim_button")
         self.viz_button = builder.get_object("run_viz_button")
         self.combobox = builder.get_object("combobox")
+        self.model_combobox = builder.get_object("model_combobox")
         self.process_num_button = builder.get_object("process_num_button")
         self.sim_num_button = builder.get_object("sim_num_button")
         self.alg_description = builder.get_object("alg_description")
@@ -176,10 +179,39 @@ class ProjectTab(Tab):
         algorithms = pf.process_factory.get_processes_names()
         for alg_name in algorithms:
             self.combobox.append_text(alg_name)
-        self.combobox.set_active(0)
+        if len(algorithms) > 0:
+            self.combobox.set_active(0)
 
+        models_names = pf.process_factory.get_models_names()
+        for model_name in models_names:
+            self.model_combobox.append_text(model_name)
+        if len(models_names) > 0:
+            self.model_combobox.set_active(0)
+
+        def on_query_tooltip(combobox, x, y, keyboard_mode, tooltip):
+            selected_model = combobox.get_active_text()
+            if selected_model:
+                desc = pf.process_factory.get_model_description(selected_model)
+                if desc:
+                    tooltip.set_text(desc)
+            return True
+
+        self.model_combobox.set_property("has-tooltip", True)
+        self.model_combobox.connect("query-tooltip", on_query_tooltip)
         for filename in self.project.get_files():
             self.add_graph(filename)
+
+    def _on_algorithm_added(self, process_factory, alg):
+        self.combobox.append_text(alg.NAME)
+        if self.combobox.get_active() == -1:
+            self.combobox.set_active(0)
+
+    def _on_algorithm_remove(self, process_factory, alg):
+        model = self.combobox.get_model()
+        for row in model:
+            if row[0] == alg.NAME:
+                self.combobox.remove_text(row.path[0])
+                break
 
     def add_graph(self, filename):
         graph_manager = self.project.graph_manager
@@ -215,6 +247,12 @@ class ProjectTab(Tab):
         process_type = self.combobox.get_active_text()
         if not process_type:
             return
+        model_name = self.model_combobox.get_active_text()
+        if not model_name:
+            return
+        model = pf.process_factory.get_model(model_name)
+        if not model:
+            return
         sim_count = self.sim_num_button.get_value_as_int()
         remove_previous = self.remove_old_checkbutton.get_active()
         arguments = {}
@@ -231,6 +269,7 @@ class ProjectTab(Tab):
                             process_type,
                             process_count,
                             sim_count,
+                            model,
                             arguments,
                             remove_previous)
 
@@ -239,6 +278,7 @@ class ProjectTab(Tab):
                         process_type,
                         process_count,
                         sim_count,
+                        model,
                         arguments = None,
                         remove_previous = False):
         simulations_tab = self.project.get_simulations_tab()
@@ -252,6 +292,7 @@ class ProjectTab(Tab):
                 sim = simulation.Simulation(process_type,
                                             process_count,
                                             graph,
+                                            model,
                                             arguments)
                 simulations_tab.add_simulation(sim)
         self.win.switch_to_tab(simulations_tab)
@@ -264,6 +305,13 @@ class ProjectTab(Tab):
         process_count = self.process_num_button.get_value_as_int()
         process_type = self.combobox.get_active_text()
         if not process_type:
+            return
+
+        model_name = self.model_combobox.get_active_text()
+        if not model_name:
+            return
+        model = pf.process_factory.get_model(model_name)
+        if not model:
             return
 
         arguments = {}
@@ -284,12 +332,13 @@ class ProjectTab(Tab):
                 err_text = err_text.format(filename, str(max_nodes_count))
                 self.win.console.writeln(err_text, "err")
                 continue
-            self.run_visual_simulation(filename, process_type, process_count, arguments)
+            self.run_visual_simulation(filename, process_type, process_count, model, arguments)
 
     def run_visual_simulation(self,
                               filename,
                               process_type,
                               process_count,
+                              model,
                               arguments = None):
         CANVAS_MAX_SIZE = 5000
         name = ntpath.basename(filename)
@@ -302,7 +351,7 @@ class ProjectTab(Tab):
             self.win.console.writeln(err_text, "err")
             return
 
-        sim = simulation.VisualSimulation(process_type, process_count, graph, arguments)
+        sim = simulation.VisualSimulation(process_type, process_count, graph, model, arguments)
         self.win.create_tab(VisualSimulationTab(self.win,
                                                 title,
                                                 sim))
@@ -341,6 +390,7 @@ class SimulationDetailTab(CloseTab):
         storage_usage_plot = plot.StorageMemoryUsagePlot(processes)
         processes_plot = plot.ProcessesLifePlot(processes)
         discovered_plot = plot.DiscoveredPlot(processes)
+        cummulative_plot = plot.CummulativeSumPlot(processes)
         calculated_plot = plot.CalculatedPlot(processes)
 
         add_plot_page(memory_usage_plot.get_widget_with_navbar(self.win),
@@ -350,6 +400,7 @@ class SimulationDetailTab(CloseTab):
 
         add_plot_page(processes_plot.get_widget_with_navbar(self.win), processes_plot.get_title())
         add_plot_page(discovered_plot.get_widget_with_navbar(self.win), discovered_plot.get_title())
+        add_plot_page(cummulative_plot.get_widget_with_navbar(self.win), cummulative_plot.get_title())
         add_plot_page(calculated_plot.get_widget_with_navbar(self.win), calculated_plot.get_title())
 
         for process in self.simulation.ctx.processes:
@@ -371,16 +422,23 @@ class SimulationDetailTab(CloseTab):
             add_process_plot_page(notebook,
                                   pr_com_plot.get_widget_with_navbar(self.win),
                                   pr_com_plot.get_title())
+            notebook.pr_notebook_loaded = False
             self.notebook.append_page(notebook,
                                       gtk.Label("Detail of process {0}".format(process.id)))
-            notebook.connect("switch-page", self.on_page_switch)
 
         self.notebook.connect("switch-page", self.on_page_switch)
 
     def on_page_switch(self, notebook, page, num):
         new_tab = notebook.get_nth_page(num)
-        if new_tab and hasattr(new_tab, "plot"):
-            new_tab.plot.draw()
+        if new_tab:
+            if hasattr(new_tab, "plot"):
+                new_tab.plot.draw()
+            elif hasattr(new_tab, "pr_notebook_loaded"):
+                if not new_tab.pr_notebook_loaded:
+                    new_tab.pr_notebook_loaded = True
+                    new_tab.connect("switch-page", self.on_page_switch)
+                    if new_tab.get_n_pages() > 0:
+                        self.on_page_switch(new_tab, None, 0)
 
     def _create_statistics(self):
         vbox = gtk.VBox()
@@ -883,7 +941,7 @@ class SimulationsTab(Tab):
                       "Pie Chart-24.png",
                       "Show summary",
                       "Show summary of all simulations",
-                      self.on_cancel)
+                      self.on_show_summary)
 
         create_button(export_simulations_button,
                       "CSV-24.png",
@@ -1093,4 +1151,19 @@ class SimulationsTab(Tab):
 
     def on_clear(self):
         self.clear()
+
+    def on_show_summary(self):
+        if len(self.completed_simulations) == 0:
+            return
+
+        groups = []
+        for sim in self.completed_simulations.values():
+            process_type = sim.get_process_type()
+            process_count = sim.get_process_count()
+            args = sim.get_arguments()
+            g = (process_type, process_count, args, sim.ctx.env.now)
+            if g not in groups:
+                groups.append(g)
+            print process_type, process_count, args
+        print groups
 

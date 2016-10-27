@@ -117,7 +117,7 @@ class Window(gtk.Window):
     def switch_to_tab(self, tab):
         pos = self.notebook.page_num(tab)
         if pos != -1:
-            self.notebook.set_current_page(pos) 
+            self.notebook.set_current_page(pos)
 
     def show(self):
         self.show_all()

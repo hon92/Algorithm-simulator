@@ -129,12 +129,14 @@ class GraphProcess(Process):
                   edge.get_target().get_id())
 
         def edge_gen():
-            yield self.wait(edge.get_time())
+            calculating_time = self.ctx.model.calculate_edge_time(self, edge)
+            yield self.wait(calculating_time)
             gs.calculate_edge(edge, self)
             self.fire("edge_calculated",
                       self.ctx.env.now,
                       self.id,
                       edge.get_time(),
+                      calculating_time,
                       edge.get_label(),
                       edge.get_source().get_id(),
                       edge.get_target().get_id())
@@ -193,15 +195,20 @@ class Communicator(EventSource):
 
     def async_send(self, data, target, tag = None, size = 1):
         ctx = self.process.ctx
-        id = self.process.id
         msg = Message(data, self.process.id, target, tag, size)
-        self.fire("async_send", msg)
-        target_process = ctx.processes[target]
-        target_process.communicator._ireceive(msg)
-        target_process.notify()
 
-    def _ireceive(self, data):
+        def asend_gen():
+            send_time  = ctx.model.calculate_send_time(msg)
+            self.fire("async_send", msg, send_time)
+            yield self.process.wait(send_time)
+            target_process = ctx.processes[target]
+            target_process.communicator._async_receive(msg)
+
+        return ctx.env.process(asend_gen())
+
+    def _async_receive(self, data):
         self.fire("async_receive", data)
+        self.process.notify()
 
     def _check_msg(self, m_source, m_tag, target, tag):
         if m_source == target:
@@ -214,13 +221,19 @@ class Communicator(EventSource):
         ctx = self.process.ctx
         if target < 0 or target >= len(ctx.processes):
             raise Exception("Unknown target for message send")
+        msg = Message(data, self.process.id, target, tag, size)
 
-        target_process = ctx.processes[target]
-        com = target_process.communicator
-        evt = com._msg_store.put(Message(data, self.process.id, target, tag, size))
-        if evt.triggered:
-            self.fire("send", evt.item)
-        return evt
+        def send_gen():
+            send_time = ctx.model.calculate_send_time(msg)
+            yield self.process.wait(send_time)
+            target_process = ctx.processes[target]
+            com = target_process.communicator
+            evt = com._msg_store.put(msg)
+            if evt.triggered:
+                self.fire("send", evt.item, send_time)
+            yield evt
+
+        return ctx.env.process(send_gen())
 
     def receive(self, source, tag = None):
         ctx = self.process.ctx

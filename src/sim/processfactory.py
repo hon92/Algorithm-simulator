@@ -2,12 +2,18 @@ import importlib
 import imp
 import inspect
 from sim.processes import process
+from src.gui.events import EventSource
+from src.sim.processes.model import *
 
 
-class ProcessFactory():
+class ProcessFactory(EventSource):
     def __init__(self):
+        EventSource.__init__(self)
+        self.register_event("algorithm_added")
+        self.register_event("algorithm_remove")
         self.available_processes = []
-        self.scripts_paths = []
+        self.scripts = []
+        self.models = {}
 
     def load_process_from_file(self, filename, class_name):
         module = importlib.import_module(filename)
@@ -40,11 +46,11 @@ class ProcessFactory():
             raise Exception("Invalid process name")
         return p.PARAMS
 
-    def create_process(self, id, ctx, name):
+    def create_process(self, pid, ctx, name):
         process_class = self._get_process(name)
         if not process_class:
             raise Exception("Invalid process name")
-        return process_class(id, ctx)
+        return process_class(pid, ctx)
 
     def _get_process(self, name):
         for p in self.available_processes:
@@ -52,40 +58,84 @@ class ProcessFactory():
                 return p
         return None
 
-    def _add_process_class(self, process_class):
-        if process_class not in self.available_processes:
-            self.available_processes.append(process_class)
-            return True
-        return False
+    def load_from_script(self, script):
+        if script in self.scripts:
+            msg = "Script '{0}' already loaded"
+            print msg.format(script)
+            return
 
-    def load_from_script(self, script_path):
-        module = imp.load_source("", script_path)
-        added_new_class = False
-        for name, obj in inspect.getmembers(module, inspect.isclass):
-            loaded_class = getattr(module, name)
-            try:
-                self._class_check(loaded_class)
-            except Exception as ex:
-                err_msg = "Class '{0}' from file '{1}' was skipped because {2}"
-                print err_msg.format(loaded_class, script_path, ex.message)
+        loaded_class_names = [c.NAME for c in self.available_processes]
+        classes = self._get_process_classes(script)
+
+        added = False
+        for c in classes:
+            if c.NAME not in loaded_class_names:
+                self.available_processes.append(c)
+                self.fire("algorithm_added", self, c)
+                print "Added algorithm '{0}'".format(c.NAME)
+                added = True
+            else:
+                print "Algorithm '{0}' is already loaded".format(c.NAME)
                 continue
-            added = self._add_process_class(loaded_class)
-            if added:
-                added_new_class = True
-        if added_new_class:
-            self.scripts_paths.append(script_path)
-        else:
-            print "No scripts added from '{0}'".format(script_path)
 
-    def get_scripts_paths(self):
-        return self.scripts_paths
+        if added:
+            self.scripts.append(script)
+        else:
+            print "No new algorithms found in '{}'" + script
+
+    def get_scripts(self):
+        return self.scripts
 
     def clear_scripts(self):
-        self.scripts_paths = []
+        for script in self.scripts:
+            self.remove_script(script)
+        self.scripts = []
 
-    def remove_script(self, script_path):
-        if script_path in self.scripts_paths:
-            self.scripts_paths.remove(script_path)
+    def remove_script(self, script):
+        if script in self.scripts:
+            classes = self._get_process_classes(script)
+            for c in classes:
+                for pr in self.available_processes:
+                    if c.NAME == pr.NAME:
+                        self.available_processes.remove(pr)
+                        self.fire("algorithm_remove", self, c)
+                        break
+            self.scripts.remove(script)
+
+    def _get_process_classes(self, script):
+        classes = []
+        module = imp.load_source("", script)
+
+        for class_name, _ in inspect.getmembers(module, inspect.isclass):
+            clazz = getattr(module, class_name)
+            try:
+                self._class_check(clazz)
+                classes.append(clazz)
+                delattr(module, class_name)
+            except Exception as ex:
+                err_msg = "Class '{0}' from file '{1}' was skipped because {2}"
+                print err_msg.format(class_name, script, ex.message)
+                delattr(module, class_name)
+                continue
+        return classes
+
+    def add_model(self, model):
+        self.models[model.get_name()] = model
+
+    def get_model(self, name):
+        return self.models.get(name)
+
+    def get_models_names(self):
+        return self.models.keys()
+
+    def get_model_description(self, model_name):
+        model = self.models.get(model_name)
+        if model:
+            return model.DESCRIPTION
+        return ""
 
 
 process_factory = ProcessFactory()
+process_factory.add_model(SlowProcessModel())
+process_factory.add_model(SlowNetModel())
+process_factory.add_model(LimitlessModel())

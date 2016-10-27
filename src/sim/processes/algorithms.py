@@ -29,7 +29,7 @@ task to another process which is waiting for work."
                     found = False
                     for p in self.ctx.processes:
                         if p.storage.get_size() == 0:
-                            self.communicator.async_send(node, p.id)
+                            yield self.communicator.async_send(node, p.id)
                             found = True
                             break
                     if found:
@@ -78,7 +78,7 @@ send new task."
                         else:
                             processes = self.ctx.processes
                             p = processes[i]
-                            self.communicator.async_send(new_node, p.id)
+                            yield self.communicator.async_send(new_node, p.id)
             else:
                 yield self.wait()
 
@@ -117,7 +117,7 @@ class Algorithm3(process.StorageProcess):
                     if not gs.is_node_discovered(new_node):
                         next = self.id + 1 % process_count
                         if next != self.id:
-                            self.communicator.async_send(new_node, next)
+                            yield self.communicator.async_send(new_node, next)
                             pr = self.ctx.processes[next]
                             gs.discover_node(new_node, pr)
                         else:
@@ -152,15 +152,19 @@ class PingPongExample(process.StorageProcess):
         while (ping_pong_count < PING_PONG_LIMIT):
             if (world_rank == ping_pong_count % 2):
                 ping_pong_count += 1
-                yield self.communicator.send(ping_pong_count, partner_rank)
+                self.log("pr {0} sended in {1}".format(self.id, self.ctx.env.now))
+                
                 self.log("{0} send incremented value {1} to process {2}".format(world_rank,
                                                                                 ping_pong_count,
                                                                                 partner_rank))
+                yield self.communicator.send(ping_pong_count, partner_rank)
+                self.log("pr {0} sended con {1}".format(self.id, self.ctx.env.now))
             else:
                 val = yield self.communicator.receive(partner_rank)
                 if val:
                     val = val.data
                     ping_pong_count = val
+                    self.log("pr {0} rec in {1}".format(self.id, self.ctx.env.now))
                     self.log("{0} received {1} from process {2}".format(world_rank,
                                                                         ping_pong_count,
                                                                         partner_rank))

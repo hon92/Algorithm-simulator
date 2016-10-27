@@ -19,6 +19,7 @@ class AbstractSimulation(events.EventSource):
         self.running = False
         self.process_type = process_type
         self.process_count = process_count
+        self.arguments = arguments
         self.processes_events = []
         self.ctx = ProcessContext(simpy.Environment(),
                                   MonitorManager(),
@@ -37,6 +38,9 @@ class AbstractSimulation(events.EventSource):
 
     def get_process_type(self):
         return self.process_type
+
+    def get_arguments(self):
+        return self.arguments
 
     def _create_procesess(self):
         self.ctx.monitor_manager.clear_monitors()
@@ -103,10 +107,11 @@ class AbstractSimulation(events.EventSource):
 
 
 class Simulation(AbstractSimulation):
-    def __init__(self, process_type, process_count, graph, arguments = None):
+    def __init__(self, process_type, process_count, graph, model, arguments = None):
         AbstractSimulation.__init__(self, process_type, process_count, arguments)
         self.ctx.graph = graph
         self.ctx.graph_stats = GraphStats(graph)
+        self.ctx.model = model
 
     def prepare(self):
         self.ctx.graph_stats.reset()
@@ -130,8 +135,8 @@ class Simulation(AbstractSimulation):
 
 
 class VisualSimulation(Simulation):
-    def __init__(self, process_type, process_count, graph, arguments = None):
-        Simulation.__init__(self, process_type, process_count, graph, arguments)
+    def __init__(self, process_type, process_count, graph, model, arguments = None):
+        Simulation.__init__(self, process_type, process_count, graph, model, arguments)
         self.register_event("step")
         self.register_event("visible_step")
         self.generator = None

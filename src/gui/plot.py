@@ -3,6 +3,7 @@ import numpy as np
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
+import matplotlib.lines as mlines
 from matplotlib import style
 from gobject import gobject
 style.use("fivethirtyeight")
@@ -82,9 +83,6 @@ class AbstractPlot():
             self.disposed = True
             self.displayed = False
 
-    def on_pick(self, e):
-        pass
-
 
 class AbstactSimplePlot(AbstractPlot):
     def __init__(self, figure, title, xlabel, ylabel):
@@ -93,7 +91,6 @@ class AbstactSimplePlot(AbstractPlot):
         self.xlabel = xlabel
         self.ylabel = ylabel
         self.axis = None
-        self.lines_map = {}
 
     def pre_process(self):
         self.axis = self.create_axis()
@@ -107,7 +104,7 @@ class AbstactSimplePlot(AbstractPlot):
         return self.figure.gca()
 
     def post_process(self):
-        self.map_leg_lines_to_axis(self.axis)
+        self.legend_mapping(self.axis)
         self.figure.tight_layout()
         self.axis.relim()
         self.axis.autoscale_view()
@@ -128,42 +125,10 @@ class AbstactSimplePlot(AbstractPlot):
             AbstractPlot.dispose(self)
 
     def on_pick(self, e):
-        leg_line = e.artist
-        if leg_line in self.lines_map:
-            plot_line = self.lines_map[leg_line]
-            visible = not plot_line.get_visible()
-            marker = plot_line.get_marker()
+        raise NotImplementedError()
 
-            if e.mouseevent.button == 1:
-                plot_line.set_visible(visible)
-                if visible:
-                    leg_line.set_alpha(1.0)
-                else:
-                    leg_line.set_alpha(0.2)
-            elif e.mouseevent.button == 3:
-                if marker == "o":
-                    plot_line.set_marker("")
-                else:
-                    plot_line.set_marker("o")
-
-        self.redraw()
-
-    def map_leg_lines_to_axis(self, ax):
-        leg = ax.get_legend()
-        if not leg and len(ax.get_lines()):
-            leg = ax.legend()
-
-        if not leg:
-            return
-
-        axis_lines = []
-        ax_lines = ax.get_lines()
-        for l in ax_lines:
-            axis_lines.append(l)
-
-        for leg_line, ax_line in zip(leg.get_lines(), axis_lines):
-            leg_line.set_picker(5)
-            self.lines_map[leg_line] = ax_line
+    def legend_mapping(self, ax):
+        raise NotImplementedError()
 
 
 class AbstractMultiPlot(AbstractPlot):
@@ -210,6 +175,103 @@ class SimplePlot(AbstactSimplePlot):
         AbstactSimplePlot.__init__(self, plt.figure(), title, xlabel, ylabel)
 
 
+class LineSimplePlot(SimplePlot):
+    def __init__(self, title, xlabel, ylabel):
+        SimplePlot.__init__(self, title, xlabel, ylabel)
+        self.lines_map = {}
+
+    def on_pick(self, e):
+        leg_line = e.artist
+        plot_line = self.lines_map.get(leg_line)
+        if plot_line:
+            visible = not plot_line.get_visible()
+            marker = plot_line.get_marker()
+
+            if e.mouseevent.button == 1:
+                plot_line.set_visible(visible)
+                if visible:
+                    leg_line.set_alpha(1.0)
+                else:
+                    leg_line.set_alpha(0.2)
+            elif e.mouseevent.button == 3:
+                if marker == "o":
+                    plot_line.set_marker("")
+                else:
+                    plot_line.set_marker("o")
+
+            self.redraw()
+
+    def legend_mapping(self, ax):
+        leg = ax.get_legend()
+        if not leg and len(ax.get_lines()):
+            leg = ax.legend()
+
+        if not leg:
+            return
+
+        axis_lines = []
+        ax_lines = ax.get_lines()
+        for l in ax_lines:
+            axis_lines.append(l)
+
+        for leg_line, ax_line in zip(leg.get_lines(), axis_lines):
+            leg_line.set_picker(5)
+            self.lines_map[leg_line] = ax_line
+
+
+class BarSimplePlot(SimplePlot):
+    def __init__(self, title, xlabel, ylabel):
+        SimplePlot.__init__(self, title, xlabel, ylabel)
+        self.bar_map = {}
+
+    def on_pick(self, e):
+        rect = e.artist
+        collection = self.bar_map.get(rect)
+        if collection:
+            visible = not collection.get_visible()
+            collection.set_visible(visible)
+            if visible:
+                rect.set_alpha(1.0)
+            else:
+                rect.set_alpha(0.2)
+            self.redraw()
+
+    def legend_mapping(self, ax):
+        legend = self.axis.get_legend()
+
+        for rect, collection in zip(legend.legendHandles, ax.collections):
+            self.bar_map[rect] = collection
+
+        for rect in legend.legendHandles:
+            rect.set_picker(5)
+
+
+class HistSimplePlot(SimplePlot):
+    def __init__(self, title, xlabel, ylabel):
+        SimplePlot.__init__(self, title, xlabel, ylabel)
+        self.bar_map = {}
+
+    def on_pick(self, e):
+        rect = e.artist
+        container = self.bar_map.get(rect)
+        if container:
+            for r in container:
+                visible = not r.get_visible()
+                r.set_visible(visible)
+                if visible:
+                    rect.set_alpha(1.0)
+                else:
+                    rect.set_alpha(0.2)
+            self.redraw()
+
+    def legend_mapping(self, ax):
+        legend = ax.get_legend()
+        for rect in legend.legendHandles:
+            rect.set_picker(5)
+        for rect, container in zip(legend.legendHandles, ax.containers):
+            self.bar_map[rect] = container
+
+
 class SubPlot(AbstactSimplePlot):
     def __init__(self, figure, title, xlabel, ylabel, i, w, h):
         AbstactSimplePlot.__init__(self, figure, title, xlabel, ylabel)
@@ -225,9 +287,9 @@ class SubPlot(AbstactSimplePlot):
 
 
 # plots for simulation detail
-class MemoryUsagePlot(SimplePlot):
+class MemoryUsagePlot(LineSimplePlot):
     def __init__(self, processes):
-        SimplePlot.__init__(self, "Memory usage", "time", "memory usage")
+        LineSimplePlot.__init__(self, "Memory usage", "time", "memory usage")
         self.processes = processes
 
     def draw_plot(self):
@@ -260,9 +322,9 @@ class MemoryUsagePlot(SimplePlot):
         self.axis.plot(xdata, ydata, label = "memory peak")
 
 
-class StorageMemoryUsagePlot(SimplePlot):
+class StorageMemoryUsagePlot(LineSimplePlot):
     def __init__(self, processes):
-        SimplePlot.__init__(self, "Storage memory usage", "time", "storage size")
+        LineSimplePlot.__init__(self, "Storage memory usage", "time", "storage size")
         self.processes = processes
 
     def draw_plot(self):
@@ -294,9 +356,9 @@ class StorageMemoryUsagePlot(SimplePlot):
             self.axis.plot(xdata, ydata, label = "memory peak")
 
 
-class ProcessesLifePlot(SimplePlot):
+class ProcessesLifePlot(BarSimplePlot):
     def __init__(self, processes):
-        SimplePlot.__init__(self, "Life of processes", "time", "processes")
+        BarSimplePlot.__init__(self, "Life of processes", "time", "processes")
         self.processes = processes
 
     def draw_plot(self):
@@ -304,50 +366,121 @@ class ProcessesLifePlot(SimplePlot):
         yspace = 2
         yticks = []
 
+        sim_time = self.processes[0].ctx.env.now
         for i, process in enumerate(self.processes):
-            sim_time = process.ctx.env.now
-            self.axis.set_xlim(0, sim_time)
             y = (i + 1) * height
             yticks.append(y + i*yspace + height / 2)
-            self.axis.broken_barh([(0, sim_time)], (y + i*yspace, height), color = "g")
+            ypos = (y + i * yspace, height)
+            self.axis.broken_barh([(0, sim_time)],
+                                  ypos,
+                                  facecolor = "green",
+                                  edgecolor = "green")
+
             mm = process.ctx.monitor_manager
+            edge_mon = mm.get_process_monitor(process.id, "EdgeMonitor")
+            self.axis.broken_barh(self.get_edges_data(edge_mon),
+                                  ypos,
+                                  facecolor = "green",
+                                  edgecolor = "white")
+
             p_monitor = mm.get_process_monitor(process.id, "ProcessMonitor")
-            data = []
-            m_data = p_monitor.collect(["wait", "notify"])
-            wait_data = m_data["wait"]
-            notify_data = m_data["notify"]
-            s = 0
-            width = 0
-            for wtime, in wait_data:
-                s = wtime
-                found_notify_evt = False
-                for n_time, in notify_data:
-                    if n_time > s:
-                        width = n_time - s
-                        found_notify_evt = True
-                        break
+            self.axis.broken_barh(self.get_waiting_data(p_monitor, sim_time),
+                                  ypos,
+                                  facecolor = "red",
+                                  edgecolor = "red")
 
-                if not found_notify_evt:
-                    width = sim_time - s
-                data.append((s, width))
-            self.axis.broken_barh(data, (y + i*yspace, height), color = "r")
+            com_monitor = mm.get_process_monitor(process.id, "CommunicationMonitor")
+            self.axis.broken_barh(self.get_send_data(com_monitor),
+                                  ypos,
+                                  facecolor = "blue",
+                                  edgecolor = "white")
 
+        self.axis.set_xlim(0, sim_time)
         self.axis.set_yticks(yticks)
         self.axis.set_yticklabels(["Process {0}".format(p.id) for p in self.processes])
 
-        red_patch = mpatches.Patch(color='red', label='waiting')
-        green_patch = mpatches.Patch(color='green', label='working')
-        self.axis.legend(handles=[red_patch, green_patch], loc = "best")
+        handles = []
+        handles.append(mpatches.Patch(color = 'green', label = 'working'))
+        handles.append(mpatches.Patch(color = 'red', label = 'waiting'))
+        handles.append(mpatches.Patch(color = 'blue', label = 'send'))
+        self.axis.legend(handles = handles, loc = "best")
+
+    def get_waiting_data(self, p_monitor, sim_time):
+        data = []
+        m_data = p_monitor.collect(["wait", "notify"])
+        wait_data = m_data["wait"]
+        notify_data = m_data["notify"]
+        s = 0
+        width = 0
+        for wtime, in wait_data:
+            s = wtime
+            found_notify_evt = False
+            for n_time, in notify_data:
+                if n_time > s:
+                    width = n_time - s
+                    found_notify_evt = True
+                    break
+
+            if not found_notify_evt:
+                width = sim_time - s
+            data.append((s, width))
+        return data
+
+    def get_send_data(self, com_monitor):
+        data = []
+        m_data = com_monitor.collect(["send",
+                                      "async_send"])
+        async_send_data = [(d[0], d[3]) for d in m_data["async_send"]]
+        send_data = [(d[0], d[3]) for d in m_data["send"]]
+        data.extend(async_send_data)
+        data.extend(send_data)
+        return data
+
+    def get_edges_data(self, edge_monitor):
+        calc_data = edge_monitor.collect(["edge_calculated"])
+        data = [(d[0] - d[3], d[3]) for d in calc_data["edge_calculated"]]
+        return data
 
     def post_process(self):
+        self.legend_mapping(self.axis)
         self.figure.tight_layout()
         self.axis.relim()
         self.axis.autoscale_view(True, True, False)
 
+    def legend_mapping(self, ax):
+        rects = ax.get_legend().legendHandles
+        if len(rects) == 0:
+            return
+        for r in rects:
+            r.set_picker(5)
+        collections = ax.collections
 
-class DiscoveredPlot(SimplePlot):
+        for r in rects:
+            self.bar_map[r] = []
+            for collection in collections:
+                arr = collection.get_facecolor()
+                c = r.get_facecolor()
+                if c[0] == arr.item(0) and c[1] == arr.item(1) \
+                    and c[2] == arr.item(2) and c[3] == arr.item(3):
+                    self.bar_map[r].append(collection)
+
+    def on_pick(self, e):
+        rect = e.artist
+        collections = self.bar_map.get(rect)
+        if collections:
+            for c in collections:
+                visible = not c.get_visible()
+                c.set_visible(visible)
+                if visible:
+                    rect.set_alpha(1.0)
+                else:
+                    rect.set_alpha(0.2)
+            self.redraw()
+
+
+class DiscoveredPlot(LineSimplePlot):
     def __init__(self, processes):
-        SimplePlot.__init__(self, "Discovering nodes", "simulation time", "nodes discovered")
+        LineSimplePlot.__init__(self, "Discovered nodes", "simulation time", "nodes discovered")
         self.processes = processes
 
     def draw_plot(self):
@@ -357,16 +490,33 @@ class DiscoveredPlot(SimplePlot):
             if not edge_mon:
                 continue
             entry_name = "edges_discovered_in_time"
-            disc_cummulative_entry = "edges_discovered_cummulative"
-            data = edge_mon.collect([entry_name, disc_cummulative_entry])
+            data = edge_mon.collect([entry_name])
             disc_data = data[entry_name]
-            disc_cummulative_data = data[disc_cummulative_entry]
             xdata = []
             ydata = []
             for sim_time, c in disc_data:
                 xdata.append(sim_time)
                 ydata.append(c)
             self.axis.plot(xdata, ydata, label = "p {0}".format(p.id))
+
+
+class CummulativeSumPlot(LineSimplePlot):
+    def __init__(self, processes):
+        LineSimplePlot.__init__(self,
+                                "Cummulative sum of discovered nodes",
+                                "simulation time",
+                                "nodes discovered")
+        self.processes = processes
+
+    def draw_plot(self):
+        for p in self.processes:
+            mm = p.ctx.monitor_manager
+            edge_mon = mm.get_process_monitor(p.id, "EdgeMonitor")
+            if not edge_mon:
+                continue
+            disc_cummulative_entry = "edges_discovered_cummulative"
+            data = edge_mon.collect([disc_cummulative_entry])
+            disc_cummulative_data = data[disc_cummulative_entry]
 
             xdata = []
             ydata = []
@@ -376,9 +526,9 @@ class DiscoveredPlot(SimplePlot):
             self.axis.plot(xdata, ydata, label = "p {0} cummulative sum".format(p.id))
 
 
-class CalculatedPlot(SimplePlot):
+class CalculatedPlot(HistSimplePlot):
     def __init__(self, processes):
-        SimplePlot.__init__(self, "Calculating edges", "edge time", "edges count")
+        HistSimplePlot.__init__(self, "Calculating edges", "edge time", "edges count")
         self.processes = processes
 
     def draw_plot(self):
@@ -396,7 +546,7 @@ class CalculatedPlot(SimplePlot):
             calc_data = data[entry_name]
             xdata = []
 
-            for _, _, edge_time, _, _, _ in calc_data:
+            for _, _, edge_time, _, _, _, _ in calc_data:
                 xdata.append(edge_time)
             if len(xdata) != 0:
                 min_v = min(xdata)
@@ -416,9 +566,9 @@ class CalculatedPlot(SimplePlot):
         self.axis.legend(handles=legend, loc = "best")
 
 
-class ProcessMemoryUsagePlot(SimplePlot):
+class ProcessMemoryUsagePlot(LineSimplePlot):
     def __init__(self, process):
-        SimplePlot.__init__(self, "Memory usage", "time", "size")
+        LineSimplePlot.__init__(self, "Memory usage", "time", "size")
         self.process = process
 
     def draw_plot(self):
@@ -475,9 +625,9 @@ class ProcessMemoryUsagePlot(SimplePlot):
         self.axis.plot(xdata, ydata, label = "Storage memory")
 
 
-class ProcessCalculatedPlot(SimplePlot):
+class ProcessCalculatedPlot(BarSimplePlot):
     def __init__(self, process):
-        SimplePlot.__init__(self, "Calculated", "time", "edge time")
+        BarSimplePlot.__init__(self, "Calculated", "time", "edge time")
         self.process = process
 
     def draw_plot(self):
@@ -488,19 +638,21 @@ class ProcessCalculatedPlot(SimplePlot):
 
         xdata = []
         ydata = []
-        for time, _, edge_time, _, _, _ in data[calc_edge_entry]:
+        for time, _, edge_time, _, _, _, _ in data[calc_edge_entry]:
             xdata.append(time)
             ydata.append(edge_time)
 
-        self.axis.vlines(xdata, [0], ydata, color = "g", label = "Calculating time")
+        self.axis.vlines(xdata, [0], ydata, color = "green", label = "Calculating time")
         if len(xdata) and len(ydata) > 0:
             self.axis.set_xlim([0, xdata[-1] + 2])
             self.axis.set_ylim([0, max(ydata)])
+        self.axis.legend(handles = [mpatches.Patch(color = "green", label = "edges")],
+                         loc = "best")
 
 
-class ProcessDiscoveredEdgesPlot(SimplePlot):
+class ProcessDiscoveredEdgesPlot(LineSimplePlot):
     def __init__(self, process):
-        SimplePlot.__init__(self, "Discovered edges", "time", "edges count")
+        LineSimplePlot.__init__(self, "Discovered edges", "time", "edges count")
         self.process = process
 
     def draw_plot(self):
@@ -528,9 +680,9 @@ class ProcessDiscoveredEdgesPlot(SimplePlot):
         self.axis.plot(xdata, ydata, label = "Cummulative sum")
 
 
-class ProcessCommunicationPlot(SimplePlot):
+class ProcessCommunicationPlot(LineSimplePlot):
     def __init__(self, process):
-        SimplePlot.__init__(self, "Process communication", "time", "message size")
+        LineSimplePlot.__init__(self, "Process communication", "time", "message size")
         self.process = process
 
     def draw_plot(self):
@@ -555,9 +707,9 @@ class ProcessCommunicationPlot(SimplePlot):
         self.max_x = 0
         self.max_y = 0
 
-        def draw_entry(entry_name, extra_text, linestyle):
+        def draw_entry(entry_name, label, linestyle):
             for p in processes:
-                p_data = [(sim_time, size) for sim_time, tid, size in data[entry_name] if tid == p.id]
+                p_data = [(d[0], d[2]) for d in data[entry_name] if d[1] == p.id]
                 xdata = []
                 ydata = []
                 for sim_time, size in p_data:
@@ -574,21 +726,41 @@ class ProcessCommunicationPlot(SimplePlot):
                                  color = colors[p.id],
                                  label = entry_name,
                                  linestyle = linestyle)
-                legends.append(mpatches.Patch(color = colors[p.id],
-                                              ls = "dashed",
-                                              label = "{0} {1} p {2} ({3})".format(entry_name,
-                                                                                   extra_text,
-                                                                                   p.id,
-                                                                                   linestyle)))
 
-        draw_entry(asend_entry, "to", "solid")
-        draw_entry(areceive_entry, "from", "dashed")
-        draw_entry(send_entry, "to", "dashdot")
-        draw_entry(receive_entry, "from", "dotted")
+                legends.append(mlines.Line2D([],
+                                             [],
+                                             color = colors[p.id],
+                                             linestyle = linestyle,
+                                             label = label.format(entry_name, p.id)))
 
-        self.axis.set_xlim([0, self.max_x])
-        self.axis.set_ylim([0, self.max_y])
+        draw_entry(asend_entry, "{0} to p {1}", "solid")
+        draw_entry(areceive_entry, "{0} from p {1}", "dashed")
+        draw_entry(send_entry, "{0} to p {1}", "dashdot")
+        draw_entry(receive_entry, "{0} from p {1}", "dotted")
+
+        self.axis.set_xlim([0, self.max_x + 5])
+        self.axis.set_ylim([0, self.max_y + 5])
         self.axis.legend(handles=legends, loc = "best")
+
+    def legend_mapping(self, ax):
+        legend = ax.get_legend()
+        for line in legend.legendHandles:
+            line.set_picker(5)
+
+        for line, line_col in zip(legend.legendHandles, ax.collections):
+            self.lines_map[line] = line_col
+
+    def on_pick(self, e):
+        line = e.artist
+        line_col = self.lines_map.get(line)
+        if line_col:
+            visible = not line_col.get_visible()
+            line_col.set_visible(visible)
+            if visible:
+                line.set_alpha(1.0)
+            else:
+                line.set_alpha(0.2)
+            self.redraw()
 
 
 class ProcessPlot(AbstractMultiPlot):
@@ -818,9 +990,9 @@ class VizualSimPlotAnim(AnimPlot):
             vbox.pack_start(self.create_widget(self.win))
             vbox.show_all()
 
-    def set_unit(self, type):
-        self.unit_label = type
-        self.show_time = type == "time"
+    def set_unit(self, unit_type):
+        self.unit_label = unit_type
+        self.show_time = unit_type == "time"
         self.update()
 
     def clear(self):
@@ -896,7 +1068,7 @@ class VizualSimPlotAnim(AnimPlot):
                                                   edge_disc_time_entry])
                 xdata = []
                 ydata = []
-                for time, _, edge_time, _, _, _ in edge_data[edge_calc_entry]:
+                for time, _, edge_time, _, _, _, _ in edge_data[edge_calc_entry]:
                     xdata.append(time)
                     ydata.append(edge_time)
 
