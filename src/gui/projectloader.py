@@ -8,7 +8,7 @@ class ProjectLoader():
     @staticmethod
     def create_empty_project(filename, name):
         project = Project(filename, name)
-        ProjectLoader.save(project)
+        ProjectLoader.save_project(project)
         return project
 
     @staticmethod
