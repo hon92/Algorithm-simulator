@@ -46,6 +46,13 @@ class ProcessFactory(EventSource):
             raise Exception("Invalid process name")
         return p.PARAMS
 
+    def get_process_params_dict(self, name):
+        params = self.get_process_parameters(name)
+        d = {}
+        for k, (val, t) in params.iteritems():
+            d[k] = val
+        return d
+
     def create_process(self, pid, ctx, name):
         process_class = self._get_process(name)
         if not process_class:
