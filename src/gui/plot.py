@@ -93,7 +93,8 @@ class AbstactSimplePlot(AbstractPlot):
         self.axis = None
 
     def pre_process(self):
-        self.axis = self.create_axis()
+        if self.axis is None:
+            self.axis = self.create_axis()
         self.axis.set_title(self.get_title())
         self.axis.set_xlabel(self.get_xlabel())
         self.axis.set_ylabel(self.get_ylabel())
@@ -136,16 +137,15 @@ class AbstractMultiPlot(AbstractPlot):
         AbstractPlot.__init__(self, plt.figure())
         self.plots = []
 
-    def add_subplot(self, index, width, height, xlabel = "", ylabel = "", title = ""):
-        self.plots.append(SubPlot(self.figure, title, xlabel, ylabel, index, width, height))
+    def add_subplot(self, width, height, plot):
+        index = len(self.plots) + 1
+        plot.axis = self.figure.add_subplot(height, width, index)
+        self.plots.append(plot)
 
     def get_axis(self, plot_index):
         if plot_index < 0 or plot_index > len(self.plots):
             return None
-        for p in self.plots:
-            if p.get_index() == plot_index:
-                return p.axis
-        return None
+        return self.plots[plot_index].axis
 
     def on_pick(self, e):
         for p in self.plots:
@@ -171,13 +171,15 @@ class AbstractMultiPlot(AbstractPlot):
 
 
 class SimplePlot(AbstactSimplePlot):
-    def __init__(self, title, xlabel, ylabel):
-        AbstactSimplePlot.__init__(self, plt.figure(), title, xlabel, ylabel)
+    def __init__(self, title, xlabel, ylabel, fig = None):
+        if fig is None:
+            fig = plt.figure()
+        AbstactSimplePlot.__init__(self, fig, title, xlabel, ylabel)
 
 
 class LineSimplePlot(SimplePlot):
-    def __init__(self, title, xlabel, ylabel):
-        SimplePlot.__init__(self, title, xlabel, ylabel)
+    def __init__(self, title, xlabel, ylabel, fig = None):
+        SimplePlot.__init__(self, title, xlabel, ylabel, fig)
         self.lines_map = {}
 
     def on_pick(self, e):
@@ -220,8 +222,8 @@ class LineSimplePlot(SimplePlot):
 
 
 class BarSimplePlot(SimplePlot):
-    def __init__(self, title, xlabel, ylabel):
-        SimplePlot.__init__(self, title, xlabel, ylabel)
+    def __init__(self, title, xlabel, ylabel, fig = None):
+        SimplePlot.__init__(self, title, xlabel, ylabel, fig)
         self.bar_map = {}
 
     def on_pick(self, e):
@@ -247,8 +249,8 @@ class BarSimplePlot(SimplePlot):
 
 
 class HistSimplePlot(SimplePlot):
-    def __init__(self, title, xlabel, ylabel):
-        SimplePlot.__init__(self, title, xlabel, ylabel)
+    def __init__(self, title, xlabel, ylabel, fig = None):
+        SimplePlot.__init__(self, title, xlabel, ylabel, fig)
         self.bar_map = {}
 
     def on_pick(self, e):
@@ -270,20 +272,6 @@ class HistSimplePlot(SimplePlot):
             rect.set_picker(5)
         for rect, container in zip(legend.legendHandles, ax.containers):
             self.bar_map[rect] = container
-
-
-class SubPlot(AbstactSimplePlot):
-    def __init__(self, figure, title, xlabel, ylabel, i, w, h):
-        AbstactSimplePlot.__init__(self, figure, title, xlabel, ylabel)
-        self.i = i
-        self.w = w
-        self.h = h
-
-    def create_axis(self):
-        return self.figure.add_subplot(self.h, self.w, self.i)
-
-    def get_index(self):
-        return self.i
 
 
 # plots for simulation detail
@@ -889,9 +877,9 @@ class VisualSimPlot(AbstractMultiPlot):
         AbstractMultiPlot.__init__(self)
 
     def pre_process(self):
-        self.add_subplot(1, 1, 3, "time", "size", "Memory usage")
-        self.add_subplot(2, 1, 3, "time", "edge time", "Calculated")
-        self.add_subplot(3, 1, 3, "time", "count", "Edges discovered")
+        self.add_subplot(1, 3, LineSimplePlot("Memory usage", "time", "size", self.figure))
+        self.add_subplot(1, 3, BarSimplePlot("Calculated", "time", "edge time", self.figure))
+        self.add_subplot(1, 3, LineSimplePlot("Edges discovered", "time", "count", self.figure))
 
         AbstractMultiPlot.pre_process(self)
         for ax in self.figure.axes:
@@ -1015,8 +1003,7 @@ class VizualSimPlotAnim(AnimPlot):
 
         for process in self.processes:
             label = "p {0}".format(process.id)
-            for p in self.plot.plots:
-                i = p.get_index()
+            for i in xrange(len(self.plot.plots)):
                 lines.append(init_ax(i, label))
 
         for ax in self.plot.get_figure().axes:
@@ -1045,6 +1032,9 @@ class VizualSimPlotAnim(AnimPlot):
 
         line = 1
         c = color_pallete.new_color_cycler()
+        bar_ax = self.plot.get_axis(1)
+        del bar_ax.collections[:]
+
         for p in self.processes:
             mm = p.ctx.monitor_manager
 
@@ -1058,7 +1048,7 @@ class VizualSimPlotAnim(AnimPlot):
                 for val, size in mem_data[mem_entry]:
                     xdata.append(val)
                     ydata.append(size)
-                update_ax(1, xdata, ydata, line, "time")
+                update_ax(0, xdata, ydata, line, "time")
 
             edge_monitor = mm.get_process_monitor(p.id, "EdgeMonitor")
             if edge_monitor:
@@ -1073,17 +1063,18 @@ class VizualSimPlotAnim(AnimPlot):
                     ydata.append(edge_time)
 
                 if len(xdata) and len(ydata) > 0:
-                    ax = self.plot.get_axis(2)
+                    ax = self.plot.get_axis(1)
                     ax.vlines(xdata, [0], ydata, color = next(c), label = "Calculating time")
                     ax.set_xlim([0, xdata[-1] + 2])
                     ax.set_ylim([0, max(ydata)])
+                    self.plot.plots[1].legend_mapping(ax)
 
                 xdata = []
                 ydata = []
                 for sim_time, storage_size in edge_data[edge_disc_time_entry]:
                     xdata.append(sim_time)
                     ydata.append(storage_size)
-                update_ax(3, xdata, ydata, line, "time")
+                update_ax(2, xdata, ydata, line, "time")
 
             line += 1
         return lines
