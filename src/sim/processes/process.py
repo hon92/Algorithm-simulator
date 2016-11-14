@@ -235,12 +235,14 @@ class Communicator(EventSource):
 
         return ctx.env.process(send_gen())
 
-    def receive(self, source, tag = None):
+    def receive(self, source = None, tag = None):
         ctx = self.process.ctx
-        if source < 0 or source >= len(ctx.processes):
+        if source and (source < 0 or source >= len(ctx.processes)):
             raise Exception("Unknown source for receive message")
 
         def match(msg):
+            if source is None:
+                return True
             return self._check_msg(msg.source, msg.tag, source, tag)
 
         evt = self._msg_store.get(match)
