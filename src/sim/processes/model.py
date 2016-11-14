@@ -11,25 +11,15 @@ SLOW_NET_SPEED = 2.5
 
 
 class Model():
-    def __init__(self, def_net_speed, def_process_speed):
-        self.net_speed = def_net_speed
-        self.process_default_speed = def_process_speed
-        self.process_speed_map = {}
-
-    def set_process_speed(self, process, speed):
-        self.process_speed_map[process.get_id()] = speed
-
-    def get_net_speed(self):
-        return self.net_speed
 
     def get_default_process_speed(self):
-        return self.process_default_speed
+        raise NotImplementedError()
+
+    def get_net_speed(self):
+        raise NotImplementedError()
 
     def get_process_speed(self, process):
-        process_speed = self.process_speed_map.get(process.get_id())
-        if process_speed is None:
-            return self.process_default_speed
-        return process_speed
+        raise NotImplementedError()
 
     def calculate_edge_time(self, process, edge):
         raise NotImplementedError()
@@ -43,7 +33,24 @@ class Model():
 
 class LinearModel(Model):
     def __init__(self, def_net_speed, def_process_speed):
-        Model.__init__(self, def_net_speed, def_process_speed)
+        self.net_speed = def_net_speed
+        self.process_default_speed = def_process_speed
+        self.process_speed_map = {}
+
+    def get_process_speed(self, process):
+        process_speed = self.process_speed_map.get(process.get_id())
+        if process_speed is None:
+            return self.process_default_speed
+        return process_speed
+
+    def set_process_speed(self, process, speed):
+        self.process_speed_map[process.get_id()] = speed
+
+    def get_default_process_speed(self):
+        return self.process_default_speed
+
+    def get_net_speed(self):
+        return self.net_speed
 
     def calculate_edge_time(self, process, edge):
         return edge.get_time() * self.get_process_speed(process)
