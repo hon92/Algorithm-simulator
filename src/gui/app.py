@@ -160,6 +160,38 @@ class App():
 
             gen_dialog.destroy()
 
+    def generate_scalability_graph(self):
+        if not self.project:
+            return
+
+        project_tab = self.project.get_project_tab()
+        process_type = project_tab.get_process_type()
+        if not process_type:
+            return
+
+        files = project_tab.get_selected_files()
+        if len(files) == 0:
+            return
+
+        model = project_tab.get_model()
+        if not model:
+            return
+
+        try:
+            arguments = project_tab.get_arguments()
+        except Exception as ex:
+            err_msg = "Algorithm parameter type error: {0}".format(ex.message)
+            self.window.console.writeln(err_msg, "err")
+            return
+
+        scale_tab = tab.ScalabilityTab(self.window,
+                                        process_type,
+                                        arguments,
+                                        model,
+                                        self.project.graph_manager.get_graph(files[0]))
+
+        self.window.create_tab(scale_tab)
+
     def close(self):
         if self.project:
             self.close_project()
