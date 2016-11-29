@@ -872,6 +872,30 @@ class ProcessPlot(AbstractMultiPlot):
 # end plot for simulation detail
 
 
+class SummaryBoxPlot(SimplePlot):
+    def __init__(self, data, ticks, title, ylabel):
+        SimplePlot.__init__(self, title, "", ylabel)
+        self.data = data
+        self.ticks = ticks
+
+    def draw_plot(self):
+        self.axis.boxplot(self.data)
+        self.axis.set_xticklabels(self.ticks)
+
+    def legend_mapping(self, ax):
+        pass
+
+
+class TimeSummaryPlot(SummaryBoxPlot):
+    def __init__(self, data, ticks):
+        SummaryBoxPlot.__init__(self, data, ticks, "Time summary", "time")
+
+
+class MemorySummaryPlot(SummaryBoxPlot):
+    def __init__(self, data, ticks):
+        SummaryBoxPlot.__init__(self, data, ticks, "Memory summary", "memory")
+
+
 class VisualSimPlot(AbstractMultiPlot):
     def __init__(self):
         AbstractMultiPlot.__init__(self)
@@ -884,6 +908,24 @@ class VisualSimPlot(AbstractMultiPlot):
         AbstractMultiPlot.pre_process(self)
         for ax in self.figure.axes:
             ax.tick_params(labelsize=8)
+
+
+class ScalabilityPlot(LineSimplePlot):
+    def __init__(self, process_type, pr_min, pr_max, pr_step, ydata):
+        title = "{0} - strong scalability".format(process_type)
+        LineSimplePlot.__init__(self, title,"process count", "time")
+        self.process_type = process_type
+        self.pr_min = pr_min
+        self.pr_max = pr_max
+        self.pr_step = pr_step
+        self.ydata = ydata
+
+    def draw_plot(self):
+        self.axis.plot(np.arange(self.pr_min,
+                                 self.pr_max,
+                                 self.pr_step),
+                       self.ydata,
+                       label = self.process_type)
 
 
 class AnimPlot():
