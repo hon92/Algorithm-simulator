@@ -6,6 +6,7 @@ import exportmodule
 import settings
 import simulationcontroller as sc
 import gladeloader as gl
+import numpy as np
 from misc import timer
 from gui import worker
 from sim import simulation
@@ -14,6 +15,7 @@ from canvas import Canvas
 from nodeselector import NodeSelector
 from gui import statistics
 from sim import processfactory as pf
+from misc import progressbar
 
 
 class Tab(gtk.VBox):
@@ -240,26 +242,20 @@ class ProjectTab(Tab):
                 self.liststore.remove(row.iter)
 
     def on_sim_button_clicked(self, w):
-        files = [row[1] for row in self.liststore if row[0]]
+        files = self.get_selected_files()
         if len(files) == 0:
             return
-        process_count = self.process_num_button.get_value_as_int()
-        process_type = self.combobox.get_active_text()
+        process_count = self.get_process_count()
+        process_type = self.get_process_type()
         if not process_type:
             return
-        model_name = self.model_combobox.get_active_text()
-        if not model_name:
-            return
-        model = pf.process_factory.get_model(model_name)
+        model = self.get_model()
         if not model:
             return
-        sim_count = self.sim_num_button.get_value_as_int()
-        remove_previous = self.remove_old_checkbutton.get_active()
-        arguments = {}
+        sim_count = self.get_simulations_count()
+        remove_previous = self.remove_previous()
         try:
-            for param_key, param_entry, p_type in self.params:
-                val = p_type(param_entry.get_text())
-                arguments[param_key] = val
+            arguments = self.get_arguments()
         except Exception as ex:
             err_msg = "Algorithm parameter type error: {0}".format(ex.message)
             self.win.console.writeln(err_msg, "err")
@@ -302,23 +298,17 @@ class ProjectTab(Tab):
         if len(lines) == 0:
             return
 
-        process_count = self.process_num_button.get_value_as_int()
-        process_type = self.combobox.get_active_text()
+        process_count = self.get_process_count()
+        process_type = self.get_process_type()
         if not process_type:
             return
 
-        model_name = self.model_combobox.get_active_text()
-        if not model_name:
-            return
-        model = pf.process_factory.get_model(model_name)
+        model = self.get_model()
         if not model:
             return
 
-        arguments = {}
         try:
-            for param_key, param_entry, p_type in self.params:
-                val = p_type(param_entry.get_text())
-                arguments[param_key] = val
+            arguments = self.get_arguments()
         except Exception as ex:
             err_msg = "Algorithm parameter type error: {0}".format(ex.message)
             self.win.console.writeln(err_msg, "err")
@@ -355,6 +345,34 @@ class ProjectTab(Tab):
         self.win.create_tab(VisualSimulationTab(self.win,
                                                 title,
                                                 sim))
+
+    def get_process_count(self):
+        return self.process_num_button.get_value_as_int()
+
+    def get_process_type(self):
+        return self.combobox.get_active_text()
+
+    def get_simulations_count(self):
+        return self.sim_num_button.get_value_as_int()
+
+    def remove_previous(self):
+        return self.remove_old_checkbutton.get_active()
+
+    def get_model(self):
+        model_name = self.model_combobox.get_active_text()
+        if not model_name:
+            return None
+        return pf.process_factory.get_model(model_name)
+
+    def get_selected_files(self):
+        return [row[1] for row in self.liststore if row[0]]
+
+    def get_arguments(self):
+        arguments = {}
+        for param_key, param_entry, p_type in self.params:
+            val = p_type(param_entry.get_text())
+            arguments[param_key] = val
+        return arguments
 
 
 class SimulationDetailTab(CloseTab):
@@ -1155,15 +1173,213 @@ class SimulationsTab(Tab):
     def on_show_summary(self):
         if len(self.completed_simulations) == 0:
             return
+        self.win.create_tab(SummaryTab(self.win, self.completed_simulations))
+
+
+class SummaryTab(CloseTab):
+    def __init__(self, window, simulations):
+        CloseTab.__init__(self, window, "Summary tab")
+        self.simulations = simulations.values()
+        self.plots = []
+
+    def build(self):
+        builder = gl.GladeLoader("summary_tab").load()
+        vbox = builder.get_object("vbox")
+        self.notebook = builder.get_object("notebook")
+        self.time_button = builder.get_object("time_rad_button")
+        self.memory_button = builder.get_object("memory_rad_button")
+        self.time_button.connect("toggled", self.on_type_change, "time")
+        self.memory_button.connect("toggled", self.on_type_change, "memory")
+        self.time_button.set_active(True)
+        return vbox
+
+    def _remove_tabs(self):
+        for p in self.plots:
+            p.dispose()
+        self.plots = []
+        tabs_count = self.notebook.get_n_pages()
+        for i in xrange(tabs_count):
+            self.notebook.remove_page(i)
+
+    def on_type_change(self, button, name):
+        if name not in ["time", "memory"]:
+            raise Exception("Unknown radio button type")
+
+        self._remove_tabs()
+        groups = self._get_groups()
+        if len(groups) == 0:
+            return
+
+        filenames = set()
+        for s in self.simulations:
+            filenames.add(s.ctx.graph.filename)
+
+        for filename in filenames:
+            data = []
+            ticks = []
+            for g in groups:
+                if g.filename == filename:
+                    if name == "memory":
+                        data.append(list(g.memory))
+                    else:
+                        data.append(list(g.times))
+                    ticks.append(g.get_label())
+
+            if name == "memory":
+                summary_plot = plot.MemorySummaryPlot(data, ticks)
+            else:
+                summary_plot = plot.TimeSummaryPlot(data, ticks)
+            summary_plot.draw()
+            self.plots.append(summary_plot)
+            summ_widget = summary_plot.get_widget_with_navbar(self.win)
+            self.notebook.append_page(summ_widget, gtk.Label(ntpath.basename(filename)))
+        self.notebook.show_all()
+
+    def _get_groups(self):
+        class Group():
+            def __init__(self, process_type, process_count, args, filename):
+                self.process_type = process_type
+                self.process_count = process_count
+                self.args = args
+                self.filename = filename
+                self.memory = set()
+                self.times = set()
+
+            def __eq__(self, g):
+                return self.process_type == g.process_type and \
+                    self.process_count == g.process_count and \
+                    self.args == g.args and \
+                    self.filename == g.filename
+
+            def get_label(self):
+                return "{0}({1})\n{2}".format(self.process_type,
+                                              self.process_count,
+                                              self.args)
 
         groups = []
-        for sim in self.completed_simulations.values():
-            process_type = sim.get_process_type()
-            process_count = sim.get_process_count()
-            args = sim.get_arguments()
-            g = (process_type, process_count, args, sim.ctx.env.now)
-            if g not in groups:
-                groups.append(g)
-            print process_type, process_count, args
-        print groups
+
+        for sim in self.simulations:
+            f, pt, pc, a, t, m = self._get_sim_info(sim)
+            group = Group(pt, pc, a, f)
+            found = False
+            for g in groups:
+                if g == group:
+                    found = True
+                    g.times.add(t)
+                    g.memory.add(m)
+                    break
+            if not found:
+                group.times.add(t)
+                group.memory.add(m)
+                groups.append(group)
+
+        return groups
+
+    def _get_sim_info(self, sim):
+        filename = sim.ctx.graph.filename
+        process_type = sim.get_process_type()
+        process_count = sim.get_process_count()
+        args = sim.get_arguments()
+        sim_time = sim.ctx.env.now
+        memory_peak = 0
+        mem_monitor = sim.ctx.monitor_manager.get_monitor("GlobalMemoryMonitor")
+        if mem_monitor:
+            mem_usage_entry = "memory_usage"
+            data = mem_monitor.collect([mem_usage_entry])
+            for _, size in data[mem_usage_entry]:
+                if size > memory_peak:
+                    memory_peak = size
+        return filename, process_type, process_count, args, sim_time, memory_peak
+
+    def close(self):
+        for p in self.plots:
+            p.dispose()
+        CloseTab.close(self)
+
+
+class ScalabilityTab(CloseTab):
+    def __init__(self, window, process_type, arguments, model, graph):
+        title = "Scalability tab - {0}".format(ntpath.basename(graph.filename))
+        CloseTab.__init__(self, window, title)
+        self.process_type = process_type
+        self.arguments = arguments
+        self.graph = graph
+        self.model = model
+        self.sim_worker = worker.SimWorker(self.on_start,
+                                           self.on_end,
+                                           self.on_error)
+        self.scale_plot = None
+        self.count = 0
+        self.current = 0
+        self.ydata = []
+        self.pr_max = 32
+        self.pr_step = 2
+        self.pr_min = 1
+        self.tick_step_val = 1
+
+    def build(self):
+        self.pb = progressbar.ProgressBar()
+        self.pb.set_pulse(False)
+        self.pb.connect("complete", self.on_complete)
+        self.pb.start()
+        for i in xrange(self.pr_min,
+                        self.pr_max,
+                        self.pr_step):
+            sim = simulation.Simulation(self.process_type,
+                                        i,
+                                        self.graph,
+                                        self.model,
+                                        self.arguments)
+            self.sim_worker.put(sim)
+
+        self.count = self.sim_worker.q.qsize()
+        self.tick_step_val = np.linspace(0, 1, self.count)
+        self.sim_worker.start()
+        self.vbox = gtk.VBox()
+        self.vbox.pack_start(gtk.HBox())
+        self.vbox.pack_start(self.pb.get_progress_bar(), False)
+        self.vbox.pack_start(gtk.HBox())
+        return self.vbox
+
+    def on_start(self, sim):
+        msg = "Simulating algorithm '{0}' with {1} processes\nTotal progress {2} / {3}"
+        self.pb.set_progressbar_text(msg.format(self.process_type,
+                                                sim.get_process_count(),
+                                                self.current,
+                                                self.count))
+
+    def on_end(self, sim):
+        self.current += 1
+        self.ydata.append(sim.ctx.env.now)
+        self.pb.set_value(self.tick_step_val[self.current - 1])
+        msg = "Simulating algorithm '{0}' with {1} processes\nTotal progress {2} / {3}"
+        self.pb.set_progressbar_text(msg.format(self.process_type,
+                                                sim.get_process_count(),
+                                                self.current,
+                                                self.count))
+
+    def on_error(self, err):
+        msg = "In simulation was found error: '{0}'".format(err)
+        self.pb.set_progressbar_text(msg)
+        self.sim_worker.quit()
+        self.pb.set_value(1)
+        self.pb.stop()
+
+    def on_complete(self):
+        self.scale_plot = plot.ScalabilityPlot(self.process_type,
+                                                self.pr_min,
+                                                self.pr_max,
+                                                self.pr_step,
+                                                self.ydata)
+        self.scale_plot.draw()
+        self.remove(self.vbox)
+        self.pack_start(self.scale_plot.get_widget_with_navbar(self.win))
+        self.show_all()
+
+    def close(self):
+        self.sim_worker.quit()
+        self.pb.stop()
+        if self.scale_plot:
+            self.scale_plot.dispose()
+        CloseTab.close(self)
 
