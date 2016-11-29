@@ -72,6 +72,8 @@ class Window(gtk.Window):
 
         generation_menu = add_menu("Generate")
         add_image_menu_item(generation_menu, "Graph", self.app.generate_graph, "Flow Chart-24.png")
+        add_image_menu_item(generation_menu, "Generate scalability graph",
+                            self.app.generate_scalability_graph, "Scales-24.png")
         return menu
 
     def set_title(self, text):
