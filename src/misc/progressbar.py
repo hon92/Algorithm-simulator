@@ -5,14 +5,18 @@ from gui import events
 
 class ProgressBar(events.EventSource):
     REFRESH_TIME = 100
-    def __init__(self, title):
+    def __init__(self):
         events.EventSource.__init__(self)
         self.progress_bar = gtk.ProgressBar()
         self.timer = None
         self.running = False
         self.last_tick = 0
+        self.pulse = True
         self.register_event("tick")
         self.register_event("complete")
+
+    def set_pulse(self, val):
+        self.pulse = val
 
     def get_progress_bar(self):
         return self.progress_bar
@@ -35,7 +39,8 @@ class ProgressBar(events.EventSource):
             self.fire("complete")
             return False
         elif self.last_tick == fraction:
-            self.progress_bar.pulse()
+            if self.pulse:
+                self.progress_bar.pulse()
         self.last_tick = fraction
         return True
 
