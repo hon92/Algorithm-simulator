@@ -3,12 +3,13 @@ import paths
 import dot
 import subprocess
 import os
+import collections
 from gui import exceptions as ex
 
 
 class GraphManager():
     def __init__(self):
-        self.graphs = {}
+        self.graphs = collections.OrderedDict()
         self.visible_graphs = {}
 
     def add_graph_file(self, filename):
