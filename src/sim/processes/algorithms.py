@@ -169,3 +169,63 @@ class PingPongExample(process.StorageProcess):
                                                                         ping_pong_count,
                                                                         partner_rank))
 
+
+class Aislinn(process.StorageProcess):
+
+    NAME = "Aislinn"
+    DESCRIPTION = "Algorithm with similar implementation like in tool Aislinn"
+    PARAMS = {}
+
+    def __init__(self, id, ctx):
+        process.StorageProcess.__init__(
+                self, id, self.NAME, ctx, process.QueueStorage(self))
+        self.counter = 0
+
+    def init(self):
+        if self.get_id() == 0:
+            root = self.ctx.graph.get_root()
+            self.counter = 1
+            self.ctx.graph_stats.discover_node(root, self)
+            for edge in root.get_edges():
+                self.storage.put((root, edge))
+
+    def run(self):
+        gs = self.ctx.graph_stats
+        processes = self.ctx.processes
+        storage = self.storage
+
+        while True:
+            self.clock.tick()
+
+            while (self.communicator.get_n_messages() or
+                   storage.get_size() == 0):
+                target = (yield self.communicator.receive()).data
+                storage.put(target)
+
+            size = storage.get_size()
+            assert self.counter == size, "counter != size"
+            (node, edge) = storage.get()
+            self.counter -= 1
+
+            if size > 1:
+                resend = False
+                for i in xrange(1, len(processes)):
+                    pid = (self.get_id() + i) % len(processes)
+                    if processes[pid].counter == 0:
+                        processes[pid].counter = 1
+                        print "RESEND:", self.get_id(), pid
+                        yield self.communicator.send((node, edge), pid)
+                        resend = True
+                        break
+                if resend:
+                    resend = True
+
+            yield self.solve_edge(edge)
+            target = edge.get_target()
+            if gs.is_node_discovered(target):
+                continue
+            gs.discover_node(target, self)
+            for edge in target.get_edges():
+                storage.put((target, edge))
+                self.counter += 1
+
