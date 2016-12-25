@@ -1,93 +1,91 @@
 
-INSTANT_PROCESS_SPEED = 1
-FAST_PROCESS_SPEED = 1.2
-NORMAL_PROCESS_SPEED = 1.5
-SLOW_PROCESS_SPEED = 2
-
-INSTANT_NET_SPEED = 0
-FAST_NET_SPEED = 1.2
-NORMAL_NET_SPEED = 1.8
-SLOW_NET_SPEED = 2.5
-
 
 class Model():
 
-    def get_default_process_speed(self):
-        raise NotImplementedError()
-
-    def get_net_speed(self):
-        raise NotImplementedError()
-
-    def get_process_speed(self, process):
-        raise NotImplementedError()
-
-    def calculate_edge_time(self, process, edge):
-        raise NotImplementedError()
-
-    def calculate_send_time(self, msg):
-        raise NotImplementedError()
-
     def get_name(self):
         raise NotImplementedError()
 
-
-class LinearModel(Model):
-    def __init__(self, def_net_speed, def_process_speed):
-        self.net_speed = def_net_speed
-        self.process_default_speed = def_process_speed
-        self.process_speed_map = {}
-
-    def get_process_speed(self, process):
-        process_speed = self.process_speed_map.get(process.get_id())
-        if process_speed is None:
-            return self.process_default_speed
-        return process_speed
-
-    def set_process_speed(self, process, speed):
-        self.process_speed_map[process.get_id()] = speed
-
-    def get_default_process_speed(self):
-        return self.process_default_speed
-
-    def get_net_speed(self):
-        return self.net_speed
-
-    def calculate_edge_time(self, process, edge):
-        return edge.get_time() * self.get_process_speed(process)
-
-    def calculate_send_time(self, msg):
-        return msg.size * self.net_speed
+    def get_description(self):
+        return "No description"
 
 
-class LimitlessModel(LinearModel):
+class NetworkModel(Model):
 
-    DESCRIPTION = "Without any limitations on network or processes"
+    def get_latency(self):
+        raise NotImplementedError()
 
-    def __init__(self):
-        LinearModel.__init__(self, INSTANT_NET_SPEED, INSTANT_PROCESS_SPEED)
+    def get_speed(self):
+        raise NotImplementedError()
 
-    def get_name(self):
-        return "No limit"
+    def evaluate_cost(self, msg):
+        raise NotImplementedError()
 
 
-class SlowNetModel(LinearModel):
+class LinearNetworkModel(NetworkModel):
 
-    DESCRIPTION = "Communication between processes is slow"
+    def evaluate_cost(self, msg):
+        return (msg.size * self.get_speed()) + self.get_latency()
 
-    def __init__(self):
-        LinearModel.__init__(self, SLOW_NET_SPEED, INSTANT_PROCESS_SPEED)
+
+class ProcessModel(Model):
+
+    def get_process_speed(self, pid):
+        raise NotImplementedError()
+
+    def evaluate_time(self, pid, edge):
+        return self.get_process_speed(pid) * edge.get_time()
+
+
+class DefaultProcessModel(ProcessModel):
+
+    def get_process_speed(self, pid):
+        return 1
 
     def get_name(self):
-        return "Slow communication"
+        return "DefaultProcessModel"
+
+    def get_description(self):
+        return "Default process model with constant speed of processes"
 
 
-class SlowProcessModel(LinearModel):
-
-    DESCRIPTION = "Processes are slower"
-
-    def __init__(self):
-        LinearModel.__init__(self, INSTANT_NET_SPEED, SLOW_PROCESS_SPEED)
+class DefaultNetworkModel(LinearNetworkModel):
 
     def get_name(self):
-        return "Slow processes"
+        return "DefaultNetworkModel"
+
+    def get_description(self):
+        return "Default network model with no network penalty"
+
+    def get_latency(self):
+        return 0
+
+    def get_speed(self):
+        return 0
+
+
+class SlowNetworkModel(LinearNetworkModel):
+
+    def get_name(self):
+        return "Slow network"
+
+    def get_description(self):
+        return "Modeling slow network communication"
+
+    def get_latency(self):
+        return 1.88
+
+    def get_speed(self):
+        return 1.2
+
+
+class SlowProcessModel(ProcessModel):
+
+    def get_name(self):
+        return "Slow process model"
+
+    def get_description(self):
+        return "Model with 2x slower processes"
+
+    def get_process_speed(self, pid):
+        return 2
 

@@ -1,4 +1,5 @@
 import gtk
+import sys
 import paths
 import ntpath
 import plot
@@ -15,7 +16,6 @@ from canvas import Canvas
 from nodeselector import NodeSelector
 from gui import statistics
 from sim import processfactory as pf
-from misc import progressbar
 
 
 class Tab(gtk.VBox):
@@ -119,8 +119,9 @@ class ProjectTab(Tab):
         self.remove_button = builder.get_object("remove_button")
         self.sim_button = builder.get_object("run_sim_button")
         self.viz_button = builder.get_object("run_viz_button")
-        self.combobox = builder.get_object("combobox")
-        self.model_combobox = builder.get_object("model_combobox")
+        self.process_combobox = builder.get_object("process_combobox")
+        self.net_model_combobox = builder.get_object("network_model_combobox")
+        self.process_model_combobox = builder.get_object("process_model_combobox")
         self.process_num_button = builder.get_object("process_num_button")
         self.sim_num_button = builder.get_object("sim_num_button")
         self.alg_description = builder.get_object("alg_description")
@@ -150,17 +151,15 @@ class ProjectTab(Tab):
                 self.parameters_box.show_all()
                 return
 
-            for param, val in params.iteritems():
-                v = val[0]
-                p_type = val[1]
+            for param, (value, type) in params.iteritems():
                 hbox = gtk.HBox()
                 hbox.pack_start(gtk.Label(param))
                 entry = gtk.Entry()
-                entry.set_text(str(v))
+                entry.set_text(str(value))
                 hbox.pack_start(entry)
                 hbox.show_all()
-                self.parameters_box.pack_start(hbox)
-                self.params.append((param, entry, p_type))
+                self.parameters_box.pack_start(hbox, padding = 10)
+                self.params.append((param, entry, type))
 
         def on_alg_change(w):
             active_text = w.get_active_text()
@@ -175,44 +174,58 @@ class ProjectTab(Tab):
         self.remove_button.connect("clicked", lambda w: self.remove_graph_file())
         self.sim_button.connect("clicked", self.on_sim_button_clicked)
         self.viz_button.connect("clicked", self.on_viz_sim_button_clicked)
-        self.combobox.connect("changed", on_alg_change)
+        self.process_combobox.connect("changed", on_alg_change)
 
     def init(self):
-        algorithms = pf.process_factory.get_processes_names()
-        for alg_name in algorithms:
-            self.combobox.append_text(alg_name)
-        if len(algorithms) > 0:
-            self.combobox.set_active(0)
 
-        models_names = pf.process_factory.get_models_names()
-        for model_name in models_names:
-            self.model_combobox.append_text(model_name)
-        if len(models_names) > 0:
-            self.model_combobox.set_active(0)
+        def create_tooltip_combobox(combobox, items, query_cb):
+            for item in items:
+                combobox.append_text(item)
 
-        def on_query_tooltip(combobox, x, y, keyboard_mode, tooltip):
-            selected_model = combobox.get_active_text()
-            if selected_model:
-                desc = pf.process_factory.get_model_description(selected_model)
-                if desc:
-                    tooltip.set_text(desc)
-            return True
+            if len(items) > 0:
+                combobox.set_active(0)
 
-        self.model_combobox.set_property("has-tooltip", True)
-        self.model_combobox.connect("query-tooltip", on_query_tooltip)
+            def query_tooltip(cb, x, y, k_mode, tooltip):
+                selected_item = cb.get_active_text()
+                if selected_item:
+                    text = query_cb(selected_item)
+                    if text:
+                        tooltip.set_text(text)
+                return True
+
+            combobox.set_property("has-tooltip", True)
+            combobox.connect("query-tooltip", query_tooltip)
+
+        processes = pf.process_factory.get_processes_names()
+        network_models = pf.process_factory.get_network_models()
+        process_models = pf.process_factory.get_process_models()
+
+        def net_model_cb(model_name):
+            return pf.process_factory.get_network_model_desc(model_name)
+
+        def process_model_cb(model_name):
+            return pf.process_factory.get_process_model_desc(model_name)
+
+        def process_cb(process_name):
+            return pf.process_factory.get_process_description(process_name)
+
+        create_tooltip_combobox(self.net_model_combobox, network_models, net_model_cb)
+        create_tooltip_combobox(self.process_model_combobox, process_models, process_model_cb)
+        create_tooltip_combobox(self.process_combobox, processes, process_cb)
+
         for filename in self.project.get_files():
             self.add_graph(filename)
 
     def _on_algorithm_added(self, process_factory, alg):
-        self.combobox.append_text(alg.NAME)
-        if self.combobox.get_active() == -1:
-            self.combobox.set_active(0)
+        self.process_combobox.append_text(alg.NAME)
+        if self.process_combobox.get_active() == -1:
+            self.process_combobox.set_active(0)
 
     def _on_algorithm_remove(self, process_factory, alg):
-        model = self.combobox.get_model()
+        model = self.process_combobox.get_model()
         for row in model:
             if row[0] == alg.NAME:
-                self.combobox.remove_text(row.path[0])
+                self.process_combobox.remove_text(row.path[0])
                 break
 
     def add_graph(self, filename):
@@ -243,17 +256,27 @@ class ProjectTab(Tab):
 
     def on_sim_button_clicked(self, w):
         files = self.get_selected_files()
+
         if len(files) == 0:
             return
+
         process_count = self.get_process_count()
         process_type = self.get_process_type()
+
         if not process_type:
             return
-        model = self.get_model()
-        if not model:
+
+        network_model = self.get_network_model()
+        if not network_model:
             return
+
+        process_model = self.get_process_model()
+        if not process_model:
+            return
+
         sim_count = self.get_simulations_count()
         remove_previous = self.remove_previous()
+
         try:
             arguments = self.get_arguments()
         except Exception as ex:
@@ -265,7 +288,8 @@ class ProjectTab(Tab):
                             process_type,
                             process_count,
                             sim_count,
-                            model,
+                            network_model,
+                            process_model,
                             arguments,
                             remove_previous)
 
@@ -274,7 +298,8 @@ class ProjectTab(Tab):
                         process_type,
                         process_count,
                         sim_count,
-                        model,
+                        network_model,
+                        process_model,
                         arguments = None,
                         remove_previous = False):
         simulations_tab = self.project.get_simulations_tab()
@@ -288,7 +313,8 @@ class ProjectTab(Tab):
                 sim = simulation.Simulation(process_type,
                                             process_count,
                                             graph,
-                                            model,
+                                            network_model,
+                                            process_model,
                                             arguments)
                 simulations_tab.add_simulation(sim)
         self.win.switch_to_tab(simulations_tab)
@@ -303,8 +329,12 @@ class ProjectTab(Tab):
         if not process_type:
             return
 
-        model = self.get_model()
-        if not model:
+        network_model = self.get_network_model()
+        if not network_model:
+            return
+
+        process_model = self.get_process_model()
+        if not process_model:
             return
 
         try:
@@ -322,13 +352,15 @@ class ProjectTab(Tab):
                 err_text = err_text.format(filename, str(max_nodes_count))
                 self.win.console.writeln(err_text, "err")
                 continue
-            self.run_visual_simulation(filename, process_type, process_count, model, arguments)
+            self.run_visual_simulation(filename, process_type, process_count,
+                                       network_model, process_model, arguments)
 
     def run_visual_simulation(self,
                               filename,
                               process_type,
                               process_count,
-                              model,
+                              network_model,
+                              process_model,
                               arguments = None):
         CANVAS_MAX_SIZE = 5000
         name = ntpath.basename(filename)
@@ -341,7 +373,8 @@ class ProjectTab(Tab):
             self.win.console.writeln(err_text, "err")
             return
 
-        sim = simulation.VisualSimulation(process_type, process_count, graph, model, arguments)
+        sim = simulation.VisualSimulation(process_type, process_count, graph,
+                                          network_model, process_model, arguments)
         self.win.create_tab(VisualSimulationTab(self.win,
                                                 title,
                                                 sim))
@@ -350,7 +383,7 @@ class ProjectTab(Tab):
         return self.process_num_button.get_value_as_int()
 
     def get_process_type(self):
-        return self.combobox.get_active_text()
+        return self.process_combobox.get_active_text()
 
     def get_simulations_count(self):
         return self.sim_num_button.get_value_as_int()
@@ -358,11 +391,17 @@ class ProjectTab(Tab):
     def remove_previous(self):
         return self.remove_old_checkbutton.get_active()
 
-    def get_model(self):
-        model_name = self.model_combobox.get_active_text()
+    def get_network_model(self):
+        model_name = self.net_model_combobox.get_active_text()
         if not model_name:
             return None
-        return pf.process_factory.get_model(model_name)
+        return pf.process_factory.get_network_model(model_name)
+
+    def get_process_model(self):
+        model_name = self.process_model_combobox.get_active_text()
+        if not model_name:
+            return None
+        return pf.process_factory.get_process_model(model_name)
 
     def get_selected_files(self):
         return [row[1] for row in self.liststore if row[0]]
@@ -473,261 +512,6 @@ class SimulationDetailTab(CloseTab):
         CloseTab.close(self)
 
 
-"""
-class SimulationProgressTab(CloseTab):
-    PROGRESS_BAR_REFRESH_TIME = 100
-    RUNNING = "In progress"
-    CANCELED = "Canceled"
-    WAITING = "Pending"
-    COMPLETED = "Completed"
-
-    NAME_COL = 0
-    PROGRESS_COL = 1
-    STATUS_COL = 2
-    TIME_COL = 3
-    FILENAME_COL = 4
-    ORDER_COL = 5
-
-    def __init__(self, window, title, project, sim_properties):
-        CloseTab.__init__(self, window, title)
-        self.project = project
-        self.sim_props = sim_properties
-        self.opened_tabs = []
-        self.current_iter = None
-        self.current_order = 0
-        self.completed_simulations = {}
-        self.used_graphs = {}
-        self.closed = False
-        self.finished = False
-
-        self.timer = timer.Timer(self.PROGRESS_BAR_REFRESH_TIME, self.on_timeout)
-        self.worker = worker.SimWorker()
-        self.worker.setDaemon(True)
-        self.worker.add_callback(lambda s: gtk.idle_add(self.on_sim_complete, s))
-        self.worker.add_error_callback(lambda s, msg: gtk.idle_add(self.on_sim_error, s, msg))
-
-    def build(self):
-        builder = gl.GladeLoader("simulation_progress_view").load()
-        vbox = builder.get_object("vbox")
-        self.treeview = builder.get_object("treeview")
-        # model structure -> process type, progress, status, time, filename, order
-        self.liststore = builder.get_object("liststore")
-
-        self.name_col = builder.get_object("name_column")
-        self.progress_col = builder.get_object("progress_column")
-        self.status_col = builder.get_object("status_column")
-        self.time_col = builder.get_object("time_column")
-
-        self.name_col.set_sort_column_id(-1)
-        self.progress_col.set_sort_column_id(-1)
-        self.status_col.set_sort_column_id(-1)
-        self.time_col.set_sort_column_id(-1)
-
-        show_button = builder.get_object("show_button")
-        export_button = builder.get_object("export_button")
-        cancel_button = builder.get_object("cancel_button")
-
-        def create_button(button, icon, tooltip, callback):
-            image = gtk.Image()
-            image.set_from_file(paths.ICONS_PATH + icon)
-            button.add(image)
-            button.set_tooltip_text(tooltip)
-            button.connect("clicked", lambda w: callback())
-            button.show_all()
-            return button
-
-        show_button = create_button(show_button,
-                                    "Show Property-24.png",
-                                    "Show results",
-                                    self.on_show_results)
-
-        export_button = create_button(export_button,
-                                      "CSV-24.png",
-                                      "Export data to CSV",
-                                      self.on_export)
-
-        cancel_button = create_button(cancel_button,
-                                      "Close Window-24.png",
-                                      "Cancel simulation",
-                                      self.on_cancel)
-        return vbox
-
-    def post_build(self):
-        def col_clicked(treeview_column):
-            if self.finished:
-                self.name_col.set_sort_column_id(self.NAME_COL)
-                self.progress_col.set_sort_column_id(self.PROGRESS_COL)
-                self.status_col.set_sort_column_id(self.STATUS_COL)
-                self.time_col.set_sort_column_id(self.TIME_COL)
-
-        self.name_col.connect("clicked", col_clicked)
-        self.progress_col.connect("clicked", col_clicked)
-        self.status_col.connect("clicked", col_clicked)
-        self.time_col.connect("clicked", col_clicked)
-        self.prepare()
-        self.run()
-
-    def prepare(self):
-        sim_count = self.sim_props["sim_count"]
-        process_count = self.sim_props["process_count"]
-        process_type = self.sim_props["process_type"]
-        files = self.sim_props["files"]
-
-        for filename in files:
-            self.used_graphs[filename] = self.project.graph_manager.get_graph(filename)
-
-        order = 0
-        for _ in xrange(sim_count):
-            for filename in files:
-                graph = self.used_graphs[filename]
-                simulator = simulation.Simulation(process_type, process_count, graph)
-                
-                simulator.register_n_processes(process_type, process_count)
-                for process in simulator.processes:
-                    process.connect("log", self.log_message)
-                process_info = "{0} - {1}({2})".format(ntpath.basename(filename),
-                                                      process_type,
-                                                      process_count)
-                
-                order += 1
-                self.liststore.append(["process_info", 0, self.WAITING, 0.0, filename, order])
-                self.worker.put(simulator)
-
-    def run(self):
-        self.worker.start()
-        self.start_next_sim()
-
-    def log_message(self, msg, tag):
-        self.win.console.writeln(msg, tag)
-
-    def get_next_row(self):
-        for row in self.liststore:
-            order = row.model.get_value(row.iter, self.ORDER_COL)
-            if order > self.current_order:
-                self.current_order = order
-                return row.iter
-        self.finished = True
-        return None
-
-    def start_next_sim(self):
-        if self.closed:
-            return
-
-        self.set_title("Simulation ({0}/{1})".format(self.current_order,
-                                                     self.sim_props["sim_count"] * 
-                                                     len(self.sim_props["files"])))
-
-        self.timer.stop()
-        self.current_iter = self.get_next_row()
-        if not self.current_iter:
-            return
-
-        self.liststore.set(self.current_iter, self.STATUS_COL, self.RUNNING)
-        self.timer.start()
-
-    def on_timeout(self):
-        sim = self.worker.task_in_progress
-        if not sim:
-            return False
-        nodes_count = sim.graph.get_nodes_count()
-        curr_nodes = sim.graph.get_discovered_nodes_count()
-        new_val = curr_nodes / float(nodes_count)
-        if new_val > 1.0:
-            self.log_message("Progress value is bigger then 1.0", "warn")
-        self.liststore.set(self.current_iter, self.PROGRESS_COL, int(new_val * 100))
-        if new_val >= 1.0:
-            return False
-        return True
-
-    def on_sim_complete(self, sim):
-        status = sim.sim_status
-        if not status:
-            self.liststore.set(self.current_iter,
-                               self.PROGRESS_COL, 100,
-                               self.STATUS_COL, self.COMPLETED,
-                               self.TIME_COL, sim.env.now)
-            self.completed_simulations[self.current_order] = sim
-        else:
-            self.liststore.set(self.current_iter,
-                               self.PROGRESS_COL, 0,
-                               self.STATUS_COL, self.CANCELED,
-                               self.TIME_COL, 0)
-        self.start_next_sim()
-
-    def on_sim_error(self, sim, msg):
-        self.liststore.set(self.current_iter,
-                               self.PROGRESS_COL, 0,
-                               self.STATUS_COL, self.CANCELED,
-                               self.TIME_COL, 0)
-        error_msg = "{0}: {1}".format(self.liststore.get_value(self.current_iter, self.NAME_COL), msg)
-        self.log_message(error_msg, "err")
-        self.start_next_sim()
-
-    def on_cancel(self):
-        iter = self.get_selected_row_iter()
-        if iter:
-            if self.liststore.get_value(iter, self.STATUS_COL) == self.RUNNING:
-                sim = self.worker.task_in_progress
-                if sim:
-                    sim.stop()
-
-    def on_export(self):
-        iter = self.get_selected_row_iter()
-        if iter:
-            if self.liststore.get_value(iter, self.STATUS_COL) == self.COMPLETED:
-                order = self.liststore.get_value(iter, self.ORDER_COL)
-                if order not in self.completed_simulations:
-                    return
-
-                sim = self.completed_simulations[order]
-                new_file = dialog.Dialog.get_factory("csv").save_as("Save simulation detail as")
-                if new_file:
-                    ex = exportmodule.CSVExportDataModule(sim)
-                    try:
-                        ex.print_to_file(new_file)
-                        msg = "Data was exported to '{0}'"
-                        self.win.console.writeln(msg.format(new_file))
-                    except IOError as ex:
-                        msg = "Export data to file '{0}' failed"
-                        self.win.console.writeln(msg.format(new_file), "err")
-
-    def on_show_results(self):
-        iter = self.get_selected_row_iter()
-        if iter:
-            if self.liststore.get_value(iter, self.STATUS_COL) == self.COMPLETED:
-                order = self.liststore.get_value(iter, self.ORDER_COL)
-                if order in self.completed_simulations:
-                    sim = self.completed_simulations[order]
-                    title = self.liststore.get_value(iter, self.NAME_COL)
-                    filename = self.liststore.get_value(iter, self.FILENAME_COL)
-                    simulator_tab = SimulatorTab(self.win,
-                                                 title + "- Detail",
-                                                 filename,
-                                                 sim)
-                    self.win.create_tab(simulator_tab)
-                    self.opened_tabs.append(simulator_tab)
-
-    def get_selected_row_iter(self):
-        tree_selection = self.treeview.get_selection()
-        if tree_selection:
-            model, rows = tree_selection.get_selected_rows()
-            if model and rows:
-                if len(rows):
-                    return model.get_iter(rows[0][0])
-        return None
-
-    def close(self):
-        self.closed = True
-        self.timer.stop()
-        self.worker.interrupt_current_task()
-        self.worker.quit()
-        for tab in self.opened_tabs:
-            tab.close()
-        for f in self.used_graphs:
-            self.project.graph_manager.return_graph(f, self.used_graphs[f])
-        CloseTab.close(self)
-"""
-
 class VisualSimulationTab(CloseTab):
 
     CANVAS_BACKGROUND_COLOR = (247, 207, 45)
@@ -752,8 +536,6 @@ class VisualSimulationTab(CloseTab):
 
         self.marker_button = builder.get_object("markerbutton")
         self.navbar_button = builder.get_object("navbarbutton")
-        self.time_button = builder.get_object("timebutton")
-        self.step_button = builder.get_object("stepbutton")
 
         plotvbox = builder.get_object("plotvbox")
         plotvbox.pack_start(self.anim_plot.create_widget(self.win))
@@ -762,14 +544,8 @@ class VisualSimulationTab(CloseTab):
     def post_build(self):
         self.marker_button.set_active(self.anim_plot.has_marker())
         self.navbar_button.set_active(self.anim_plot.has_navbar())
-        if self.anim_plot.get_unit() == "time":
-            self.time_button.set_active(True)
-        else:
-            self.step_button.set_active(True)
         self.marker_button.connect("toggled", self.on_marker_button_toggle)
         self.navbar_button.connect("toggled", self.on_navbar_button_toggle)
-        self.time_button.connect("toggled", self.on_unit_change, "time")
-        self.step_button.connect("toggled", self.on_unit_change, "step")
         self.controller = sc.SimulationController(self, self.toolbar)
         self.state_stats = statistics.StateStatistics(self.properties_store)
         self.sim_stats = statistics.SimulationStatistics(self.info_store,
@@ -798,10 +574,6 @@ class VisualSimulationTab(CloseTab):
 
     def on_navbar_button_toggle(self, button):
         self.anim_plot.show_navbar(button.get_active())
-
-    def on_unit_change(self, button, data):
-        if button.get_active():
-            self.anim_plot.set_unit(data)
 
     def redraw(self):
         self.canvas.set_color(*self.CANVAS_BACKGROUND_COLOR)
@@ -1298,13 +1070,15 @@ class SummaryTab(CloseTab):
 
 
 class ScalabilityTab(CloseTab):
-    def __init__(self, window, process_type, arguments, model, graph):
+    def __init__(self, window, process_type, arguments, network_model, process_model, graph,
+                 pr_min = 1, pr_max = 32, pr_step = 2, stochastic = False, stochastic_repeat = 10):
         title = "Scalability tab - {0}".format(ntpath.basename(graph.filename))
         CloseTab.__init__(self, window, title)
         self.process_type = process_type
         self.arguments = arguments
         self.graph = graph
-        self.model = model
+        self.network_model = network_model
+        self.process_model = process_model
         self.sim_worker = worker.SimWorker(self.on_start,
                                            self.on_end,
                                            self.on_error)
@@ -1312,73 +1086,151 @@ class ScalabilityTab(CloseTab):
         self.count = 0
         self.current = 0
         self.ydata = []
-        self.pr_max = 32
-        self.pr_step = 2
-        self.pr_min = 1
+        self.pr_max = pr_max
+        self.pr_step = pr_step
+        self.pr_min = pr_min
+        self.stochastic = stochastic
+        self.repeat_count = stochastic_repeat
         self.tick_step_val = 1
+        self.progress_bar = gtk.ProgressBar()
 
     def build(self):
-        self.pb = progressbar.ProgressBar()
-        self.pb.set_pulse(False)
-        self.pb.connect("complete", self.on_complete)
-        self.pb.start()
-        for i in xrange(self.pr_min,
-                        self.pr_max,
-                        self.pr_step):
-            sim = simulation.Simulation(self.process_type,
-                                        i,
-                                        self.graph,
-                                        self.model,
-                                        self.arguments)
-            self.sim_worker.put(sim)
-
-        self.count = self.sim_worker.q.qsize()
+        self._prepare_simulations()
         self.tick_step_val = np.linspace(0, 1, self.count)
         self.sim_worker.start()
+
         self.vbox = gtk.VBox()
         self.vbox.pack_start(gtk.HBox())
-        self.vbox.pack_start(self.pb.get_progress_bar(), False)
+        self.vbox.pack_start(self.progress_bar, False)
         self.vbox.pack_start(gtk.HBox())
         return self.vbox
 
+    def _prepare_simulations(self):
+        for i in xrange(self.pr_min,
+                        self.pr_max,
+                        self.pr_step):
+            repeat = 1
+            if self.stochastic:
+                repeat = self.repeat_count
+
+            for _ in xrange(repeat):
+                sim = simulation.Simulation(self.process_type,
+                                            i,
+                                            self.graph,
+                                            self.network_model,
+                                            self.process_model,
+                                            self.arguments)
+                self.sim_worker.put(sim)
+
+        self.count = self.sim_worker.q.qsize()
+
     def on_start(self, sim):
+
+        def log_callback(msg, msg_type):
+            self.win.console.writeln(msg, msg_type)
+
+        for p in sim.ctx.processes:
+            p.connect("log", log_callback)
+
         msg = "Simulating algorithm '{0}' with {1} processes\nTotal progress {2} / {3}"
-        self.pb.set_progressbar_text(msg.format(self.process_type,
-                                                sim.get_process_count(),
-                                                self.current,
-                                                self.count))
+        self.progress_bar.set_text(msg.format(self.process_type,
+                                              sim.get_process_count(),
+                                              self.current,
+                                              self.count))
 
     def on_end(self, sim):
         self.current += 1
         self.ydata.append(sim.ctx.env.now)
-        self.pb.set_value(self.tick_step_val[self.current - 1])
+        self.progress_bar.set_fraction(self.tick_step_val[self.current - 1])
         msg = "Simulating algorithm '{0}' with {1} processes\nTotal progress {2} / {3}"
-        self.pb.set_progressbar_text(msg.format(self.process_type,
-                                                sim.get_process_count(),
-                                                self.current,
-                                                self.count))
+        self.progress_bar.set_text(msg.format(self.process_type,
+                                              sim.get_process_count(),
+                                              self.current,
+                                              self.count))
+        if self.current == self.count:
+            self.show_results()
 
     def on_error(self, err):
         msg = "In simulation was found error: '{0}'".format(err)
-        self.pb.set_progressbar_text(msg)
+        self.progress_bar.set_text(msg)
         self.sim_worker.quit()
-        self.pb.set_value(1)
-        self.pb.stop()
+        self.progress_bar.set_fraction(1.0)
 
-    def on_complete(self):
+    def show_results(self):
+        yerr = None
+        if self.stochastic:
+            self.ydata, yerr = self._calculate_results()
+
+        
         self.scale_plot = plot.ScalabilityPlot(self.process_type,
                                                 self.pr_min,
                                                 self.pr_max,
                                                 self.pr_step,
-                                                self.ydata)
+                                                self.ydata,
+                                                yerr)
         self.scale_plot.draw()
         self.remove(self.vbox)
+
+        info_text = "Strong scalability plot for {0}algorithm '{1}' on graph '{2}'.\n\
+Process model is '{3}'. Network model is '{4}'\n\
+Start with processes {5} and end with processes {6}.\n\
+Process increment is {7}.\n\
+Arguments used in process are: {8}"
+
+        stochastic = ""
+        if self.stochastic:
+            stochastic = "stochastic "
+            info_text += "\nStochastic repeat count is {9}"
+
+        info_box = gtk.VBox()
+        info_box.pack_start(gtk.Label(info_text.format(stochastic,
+                                                       self.process_type,
+                                                       ntpath.basename(self.graph.filename),
+                                                       self.process_model.get_name(),
+                                                       self.network_model.get_name(),
+                                                       self.pr_min,
+                                                       self.pr_max,
+                                                       self.pr_step,
+                                                       self.arguments,
+                                                       self.repeat_count)))
+        self.pack_start(info_box, False)
         self.pack_start(self.scale_plot.get_widget_with_navbar(self.win))
         self.show_all()
 
+    def _calculate_results(self):
+        data = []
+        top_error = []
+        bottom_error = []
+
+        def calculate(times, results, top_error, bottom_error):
+            min_t = sys.maxint
+            max_t = 0
+            sum_t = 0
+            for t in times:
+                sum_t += t
+                if t < min_t:
+                    min_t = t
+
+                if t > max_t:
+                    max_t = t
+
+            avg = sum_t / len(times)
+            results.append(avg)
+            bottom_error.append(avg - min_t)
+            top_error.append(max_t - avg)
+
+        times = []
+        for t in self.ydata:
+            times.append(t)
+
+            if len(times) == self.repeat_count:
+                calculate(times, data, top_error, bottom_error)
+                times = []
+
+        return data, [bottom_error, top_error]
+
     def close(self):
         self.sim_worker.quit()
-        self.pb.stop()
         if self.scale_plot:
             self.scale_plot.dispose()
         CloseTab.close(self)

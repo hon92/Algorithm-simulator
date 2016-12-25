@@ -107,11 +107,13 @@ class AbstractSimulation(events.EventSource):
 
 
 class Simulation(AbstractSimulation):
-    def __init__(self, process_type, process_count, graph, model, arguments = None):
+    def __init__(self, process_type, process_count, graph,
+                 network_model,process_model, arguments = None):
         AbstractSimulation.__init__(self, process_type, process_count, arguments)
         self.ctx.graph = graph
         self.ctx.graph_stats = GraphStats(graph)
-        self.ctx.model = model
+        self.ctx.network_model = network_model
+        self.ctx.process_model = process_model
 
     def prepare(self):
         self.ctx.graph_stats.reset()
@@ -135,8 +137,10 @@ class Simulation(AbstractSimulation):
 
 
 class VisualSimulation(Simulation):
-    def __init__(self, process_type, process_count, graph, model, arguments = None):
-        Simulation.__init__(self, process_type, process_count, graph, model, arguments)
+    def __init__(self, process_type, process_count, graph,
+                 network_model, process_model, arguments = None):
+        Simulation.__init__(self, process_type, process_count, graph,
+                            network_model, process_model, arguments)
         self.register_event("step")
         self.register_event("visible_step")
         self.generator = None

@@ -110,7 +110,8 @@ class SimulationStatistics(Statistics):
         ctx = self.simulation.ctx
         process_type = self.simulation.get_process_type()
         process_count = self.simulation.get_process_count()
-        model_name = ctx.model.get_name()
+        network_model = ctx.network_model.get_name()
+        process_model = ctx.process_model.get_name()
         time = self.simulation.ctx.env.now
         filename = ctx.graph.filename
         gs = ctx.graph_stats
@@ -164,9 +165,14 @@ class SimulationStatistics(Statistics):
                                    "'{0}' algorithm parameter".format(arg_name)))
 
         self.add_prop(Property(i,
-                               "Model",
-                               model_name,
-                               "Model which define net and process speed"))
+                               "Network model",
+                               network_model,
+                               "Model which define network communication"))
+
+        self.add_prop(Property(i,
+                               "Process model",
+                               process_model,
+                               "Model which define process speed"))
 
         self.add_prop(Property(i,
                                "Process count",

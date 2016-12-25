@@ -1,3 +1,4 @@
+import os
 from xml.etree.cElementTree import Element, SubElement, parse
 from misc import utils
 from gui.project import Project
@@ -12,21 +13,30 @@ class ProjectLoader():
         return project
 
     @staticmethod
-    def load_project(filename, error_callback = None):
+    def load_project(filename):
+        if not os.path.exists(filename):
+            raise Exception("File '{0}' not exists".format(filename))
+
         tree = parse(filename);
-        root = tree.getroot()
-        project_name = root.get("name")
-        files_node = root.find("files")
-        files_nodes = files_node.findall("file")
+        project_node = tree.getroot()
+        if project_node.tag != "project":
+            raise Exception("Project don't have 'project' root tag")
+
+        project_name = project_node.get("name", "")
+
+        files_node = project_node.find("files")
+
+        files_nodes = []
+        if files_node:
+            files_nodes = files_node.findall("file")
 
         project = Project(filename, project_name)
-        if error_callback:
-            project.connect("error", error_callback)
 
         for file_el in files_nodes:
             file_path = file_el.get("path")
-            if file_path:
-                project.add_file(file_path)
+            if not file_path:
+                raise Exception("Some file in project has unspecified 'path' attribute")
+            project.add_file(file_path)
 
         return project
 
@@ -42,3 +52,4 @@ class ProjectLoader():
         with open(project.get_file(), "w") as f:
             f.write(utils.get_pretty_xml(root))
             f.flush()
+

@@ -1,13 +1,10 @@
 import os
 import graphmanager
 from gui import exceptions as exc
-from gui.events import EventSource
 
 
-class Project(EventSource):
+class Project():
     def __init__(self, filename, name):
-        EventSource.__init__(self)
-        self.register_event("error")
         self.filename = filename
         self.name = name
         self.saved = True

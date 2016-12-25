@@ -361,8 +361,9 @@ class ProcessesLifePlot(BarSimplePlot):
             ypos = (y + i * yspace, height)
             self.axis.broken_barh([(0, sim_time)],
                                   ypos,
-                                  facecolor = "green",
-                                  edgecolor = "green")
+                                  facecolor = "white",
+                                  edgecolor = "white",
+                                  alpha = 0.0)
 
             mm = process.ctx.monitor_manager
             edge_mon = mm.get_process_monitor(process.id, "EdgeMonitor")
@@ -911,7 +912,7 @@ class VisualSimPlot(AbstractMultiPlot):
 
 
 class ScalabilityPlot(LineSimplePlot):
-    def __init__(self, process_type, pr_min, pr_max, pr_step, ydata):
+    def __init__(self, process_type, pr_min, pr_max, pr_step, ydata, yerr):
         title = "{0} - strong scalability".format(process_type)
         LineSimplePlot.__init__(self, title,"process count", "time")
         self.process_type = process_type
@@ -919,13 +920,16 @@ class ScalabilityPlot(LineSimplePlot):
         self.pr_max = pr_max
         self.pr_step = pr_step
         self.ydata = ydata
+        self.yerr = yerr
 
     def draw_plot(self):
-        self.axis.plot(np.arange(self.pr_min,
+        self.axis.errorbar(np.arange(self.pr_min,
                                  self.pr_max,
                                  self.pr_step),
-                       self.ydata,
-                       label = self.process_type)
+                           self.ydata,
+                           yerr = self.yerr,
+                           label = self.process_type,
+                           elinewidth = 0.8)
 
 
 class AnimPlot():
@@ -977,7 +981,6 @@ class VizualSimPlotAnim(AnimPlot):
         self.processes = []
         self.marker = ""
         self.enable_navbar = True
-        self.unit_label = "time"
         self.show_time = True
         self.widget = None
         self.win = None
@@ -991,8 +994,8 @@ class VizualSimPlotAnim(AnimPlot):
     def has_navbar(self):
         return self.enable_navbar
 
-    def get_unit(self):
-        return self.unit_label
+#     def get_unit(self):
+#         return self.unit_label
 
     def set_marker(self, marker_type):
         self.marker = marker_type
@@ -1019,11 +1022,6 @@ class VizualSimPlotAnim(AnimPlot):
             vbox.remove(self.widget)
             vbox.pack_start(self.create_widget(self.win))
             vbox.show_all()
-
-    def set_unit(self, unit_type):
-        self.unit_label = unit_type
-        self.show_time = unit_type == "time"
-        self.update()
 
     def clear(self):
         for ax in self.get_figure().axes:
@@ -1058,10 +1056,6 @@ class VizualSimPlotAnim(AnimPlot):
 
         def update_ax(index, xdata, ydata, line, label = None):
             ax = self.plot.get_axis(index)
-            if label:
-                ax.set_xlabel(label)
-            else:
-                ax.set_xlabel(self.get_unit())
             lines = ax.get_lines()
             l = lines[line - 1]
             xlen = len(l.get_xdata())

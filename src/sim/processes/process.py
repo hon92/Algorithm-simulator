@@ -129,7 +129,7 @@ class GraphProcess(Process):
                   edge.get_target().get_id())
 
         def edge_gen():
-            calculating_time = self.ctx.model.calculate_edge_time(self, edge)
+            calculating_time = self.calculate_edge_time(edge)
             yield self.wait(calculating_time)
             gs.calculate_edge(edge, self)
             self.fire("edge_calculated",
@@ -148,6 +148,10 @@ class GraphProcess(Process):
         mm = self.ctx.monitor_manager
         mm.add_process_callback("edge_discovered", self.id, self)
         mm.add_process_callback("edge_calculated", self.id, self)
+
+    def calculate_edge_time(self, edge):
+        pr_model = self.ctx.process_model
+        return pr_model.evaluate_time(self.id, edge)
 
 
 class StorageProcess(GraphProcess):
@@ -198,7 +202,7 @@ class Communicator(EventSource):
         msg = Message(data, self.process.id, target, tag, size)
 
         def asend_gen():
-            send_time  = ctx.model.calculate_send_time(msg)
+            send_time  = self.calculate_send_time(msg)
             self.fire("async_send", msg, send_time)
             yield self.process.wait(send_time)
             target_process = ctx.processes[target]
@@ -224,7 +228,7 @@ class Communicator(EventSource):
         msg = Message(data, self.process.id, target, tag, size)
 
         def send_gen():
-            send_time = ctx.model.calculate_send_time(msg)
+            send_time = self.calculate_send_time(msg)
             yield self.process.wait(send_time)
             target_process = ctx.processes[target]
             com = target_process.communicator
@@ -297,6 +301,10 @@ class Communicator(EventSource):
             if msg.source in pids:
                 count += 1
         return count
+
+    def calculate_send_time(self, msg):
+        network_model = self.process.ctx.network_model
+        return network_model.evaluate_cost(msg)
 
 
 class Clock(EventSource):

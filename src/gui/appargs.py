@@ -1,6 +1,7 @@
 import argparse
 import sys
 import json
+from projectloader import ProjectLoader
 from sim import processfactory as pf
 
 
@@ -13,7 +14,8 @@ class AppArgs:
         self.parser.add_argument("-s", "--select", type = list,
                             help = "Graph position in project (starting from 1)")
         self.parser.add_argument("-r", "--run", type = str, help = "Algorithm used for simulation")
-        self.parser.add_argument("-m", "--model", type = str, help = "Model used for simulation")
+        self.parser.add_argument("-nm", "--network_model", type = str, help = "Network model used for simulation")
+        self.parser.add_argument("-pm", "--process_model", type = str, help = "Process model used for simulation")
         self.parser.add_argument("-pr", "--processes", type = int,
                             help = "Process count used for algorithm")
         self.parser.add_argument("-c", "--count", type = int,
@@ -28,18 +30,24 @@ Example: ... -args \"{\\\"prop\\\":\\\"val\\\"}\"")
 
         if args.project:
             try:
-                self.app.open_project(args.project)
+                project = ProjectLoader.load_project(args.project)
+                self.app._open_project(project)
             except Exception as ex:
-                self.on_arg_error(ex.message)
+                self.on_arg_error("Project is corrupted ({0})".format(ex.message))
 
             if args.select:
                 available_processes_names = pf.process_factory.get_processes_names()
-                model_names = pf.process_factory.get_models_names()
+                network_models = pf.process_factory.get_network_models()
+                process_models = pf.process_factory.get_process_models()
 
                 if len(available_processes_names) == 0:
                     self.on_arg_error("No available processes")
-                if len(model_names) == 0:
-                    self.on_arg_error("No model available")
+
+                if len(network_models) == 0:
+                    self.on_arg_error("No network models available")
+
+                if len(process_models) == 0:
+                    self.on_arg_error("No process models available")
 
                 project_files = self.app.project.get_files()
                 used = []
@@ -67,7 +75,8 @@ Example: ... -args \"{\\\"prop\\\":\\\"val\\\"}\"")
                 sim_count = 1
                 process_type = available_processes_names[0]
                 process_count = 1
-                model = pf.process_factory.get_model(model_names[0])
+                network_model = pf.process_factory.get_network_model(network_models[0])
+                process_model = pf.process_factory.get_process_model(process_models[0])
                 arguments = pf.process_factory.get_process_params_dict(process_type)
 
                 if args.run:
@@ -85,10 +94,15 @@ Example: ... -args \"{\\\"prop\\\":\\\"val\\\"}\"")
                         self.on_arg_error("Simulation count must be between 1 - 100")
                     sim_count = args.count
 
-                if args.model:
-                    model = pf.process_factory.get_model(args.model)
-                    if model is None:
-                        self.on_arg_error("Unknown model name '{0}'".format(args.model))
+                if args.network_model:
+                    network_model = pf.process_factory.get_network_model(args.network_model)
+                    if network_model is None:
+                        self.on_arg_error("Unknown network model name '{0}'".format(args.network_model))
+
+                if args.process_model:
+                    process_model = pf.process_factory.get_process_model(args.process_model)
+                    if process_model is None:
+                        self.on_arg_error("Unknown process model name '{0}'".format(args.process_model))
 
                 if args.arguments:
                     pr_args = args.arguments
@@ -112,7 +126,8 @@ Example: ... -args \"{\\\"prop\\\":\\\"val\\\"}\"")
                                   process_type,
                                   process_count,
                                   sim_count,
-                                  model,
+                                  network_model,
+                                  process_model,
                                   arguments
                                   )
 

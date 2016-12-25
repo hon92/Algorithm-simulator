@@ -1,9 +1,10 @@
 import importlib
 import imp
 import inspect
+import collections
 from sim.processes import process
 from src.gui.events import EventSource
-from src.sim.processes.model import *
+from src.sim.processes import model
 
 
 class ProcessFactory(EventSource):
@@ -13,7 +14,8 @@ class ProcessFactory(EventSource):
         self.register_event("algorithm_remove")
         self.available_processes = []
         self.scripts = []
-        self.models = {}
+        self.network_models = collections.OrderedDict()
+        self.process_models = collections.OrderedDict()
 
     def load_process_from_file(self, filename, class_name):
         module = importlib.import_module(filename)
@@ -49,7 +51,7 @@ class ProcessFactory(EventSource):
     def get_process_params_dict(self, name):
         params = self.get_process_parameters(name)
         d = {}
-        for k, (val, t) in params.iteritems():
+        for k, (val, _) in params.iteritems():
             d[k] = val
         return d
 
@@ -126,23 +128,42 @@ class ProcessFactory(EventSource):
                 continue
         return classes
 
-    def add_model(self, model):
-        self.models[model.get_name()] = model
+    def add_network_model(self, model):
+        self.network_models[model.get_name()] = model
 
-    def get_model(self, name):
-        return self.models.get(name)
+    def add_process_model(self, model):
+        self.process_models[model.get_name()] = model
 
-    def get_models_names(self):
-        return self.models.keys()
+    def get_network_model(self, name):
+        return self.network_models.get(name)
 
-    def get_model_description(self, model_name):
-        model = self.models.get(model_name)
-        if model:
-            return model.DESCRIPTION
-        return ""
+    def get_process_model(self, name):
+        return self.process_models.get(name)
+
+    def get_network_models(self):
+        return self.network_models.keys()
+
+    def get_process_models(self):
+        return self.process_models.keys()
+
+    def get_network_model_desc(self, model_name):
+        model = self.get_network_model(model_name)
+        if not model:
+            raise Exception("Model '{0}' not exists in network models".format(model_name))
+
+        return model.get_description()
+
+    def get_process_model_desc(self, model_name):
+        model = self.get_process_model(model_name)
+        if not model:
+            raise Exception("Model '{0}' not exists in process models".format(model_name))
+
+        return model.get_description()
 
 
 process_factory = ProcessFactory()
-process_factory.add_model(SlowProcessModel())
-process_factory.add_model(SlowNetModel())
-process_factory.add_model(LimitlessModel())
+process_factory.add_process_model(model.DefaultProcessModel())
+process_factory.add_network_model(model.DefaultNetworkModel())
+process_factory.add_network_model(model.SlowNetworkModel())
+process_factory.add_process_model(model.SlowProcessModel())
+

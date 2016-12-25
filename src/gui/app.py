@@ -6,9 +6,8 @@ import gtk
 import window
 import tab
 import appargs
-import gladeloader as gl
+import operations
 from gui.dialogs import dialog
-from graphgenerator import GraphGenerator
 from gui.projectloader import ProjectLoader
 
 gobject.threads_init()
@@ -56,20 +55,16 @@ class App():
                 self.close_project()
 
             try:
-                def on_project_error(msg):
-                    self.window.console.writeln(msg, "err")
-
                 msg = "Opening project at location '{0}'".format(project_file)
                 self.window.console.writeln(msg)
-                project = ProjectLoader.load_project(project_file, on_project_error)
+                project = ProjectLoader.load_project(project_file)
                 self._open_project(project)
                 msg = "Project '{0}' was opened".format(project.get_name())
                 self.window.console.writeln(msg)
             except IOError as ex:
                 raise Exception("Project file error: {0}".format(ex))
             except Exception as ex:
-                raise Exception("Project is corrupted ({0})".format(ex.message))
-                #self.window.console.writeln("Project is corrupted ({0})".format(ex.message), "err")
+                self.window.console.writeln("Project is corrupted ({0})".format(ex.message), "err")
 
     def _open_project(self, project):
         self.project = project
@@ -119,78 +114,14 @@ class App():
             self.project.get_project_tab().on_viz_sim_button_clicked(None)
 
     def generate_graph(self):
-        if self.project:
-            builder = gl.GladeLoader("generate_graph_dialog").load()
-            gen_dialog = builder.get_object("dialog")
-            gen_dialog.set_title("Generate graph settings")
-            gen_dialog.set_position(gtk.WIN_POS_CENTER)
-
-            filename_entry = builder.get_object("filename_entry")
-            nodes_count_spin = builder.get_object("nodes_count_spin")
-            edges_count_spin = builder.get_object("edges_count_spin")
-            seed_spin = builder.get_object("seed_spin")
-            file_chooser_button = builder.get_object("file_chooser_button")
-            insert_checkbutton = builder.get_object("insert_checkbutton")
-            properties = {}
-
-            def on_file_button_clicked(w):
-                graph_file = dialog.Dialog.get_factory("xml").save_as("Save graph to file")
-                if not graph_file:
-                    graph_file = "" 
-                filename_entry.set_text(graph_file)
-
-            file_chooser_button.connect("clicked", on_file_button_clicked)
-            response = gen_dialog.run()
-            if response:
-                try:
-                    graph_generator = GraphGenerator(filename_entry.get_text(),
-                                                     nodes_count_spin.get_value_as_int(),
-                                                     edges_count_spin.get_value_as_int(),
-                                                     properties,
-                                                     seed_spin.get_value_as_int())
-
-                    graph_file = graph_generator.create_graph()
-                    self.window.console.writeln("Graph generated to file {0}".format(graph_file))
-                    if insert_checkbutton.get_active():
-                        self.project.add_file(graph_file)
-                        project_tab = self.window.get_tab("Project")
-                        project_tab.add_graph(graph_file)
-                except Exception as ex:
-                    self.window.console.writeln(ex.message, "err")
-
-            gen_dialog.destroy()
+        if not self.project:
+            return
+        operations.GenerateGraph(self).perform()
 
     def generate_scalability_graph(self):
         if not self.project:
             return
-
-        project_tab = self.project.get_project_tab()
-        process_type = project_tab.get_process_type()
-        if not process_type:
-            return
-
-        files = project_tab.get_selected_files()
-        if len(files) == 0:
-            return
-
-        model = project_tab.get_model()
-        if not model:
-            return
-
-        try:
-            arguments = project_tab.get_arguments()
-        except Exception as ex:
-            err_msg = "Algorithm parameter type error: {0}".format(ex.message)
-            self.window.console.writeln(err_msg, "err")
-            return
-
-        scale_tab = tab.ScalabilityTab(self.window,
-                                        process_type,
-                                        arguments,
-                                        model,
-                                        self.project.graph_manager.get_graph(files[0]))
-
-        self.window.create_tab(scale_tab)
+        operations.ScalabilityDialog(self).perform()
 
     def close(self):
         if self.project:
