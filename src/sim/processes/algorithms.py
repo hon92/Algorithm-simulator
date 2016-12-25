@@ -213,7 +213,7 @@ class Aislinn(process.StorageProcess):
                     pid = (self.get_id() + i) % len(processes)
                     if processes[pid].counter == 0:
                         processes[pid].counter = 1
-                        print "RESEND:", self.get_id(), pid
+                        self.log("RESEND: " + str(self.get_id()) + " " + str(pid))
                         yield self.communicator.send((node, edge), pid)
                         resend = True
                         break
