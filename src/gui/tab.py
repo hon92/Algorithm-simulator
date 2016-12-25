@@ -601,7 +601,7 @@ class VisualSimulationTab(CloseTab):
     def switch_selected_node(self, node):
         gs = self.simulation.ctx.graph_stats
         if node:
-            gs.set_selected_node(node.id)
+            gs.set_selected_node(node)
             self.update_node_info(node)
         else:
             gs.set_selected_node(None)

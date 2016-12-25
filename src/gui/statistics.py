@@ -83,20 +83,16 @@ class StateStatistics(Statistics):
         self.update_prop("Succesors", len(edges))
         gs = simulation.ctx.graph_stats
 
-        undiscovered_edges = [e for e in edges if not gs.is_edge_discovered(e.source.id,
-                                                                            e.target.id,
-                                                                            e.label)]
-        uncomplete_edges = [e for e in edges if not gs.is_edge_calculated(e.source.id,
-                                                                         e.target.id,
-                                                                         e.label)]
+        undiscovered_edges = [e for e in edges if not gs.is_edge_discovered(e)]
+        uncomplete_edges = [e for e in edges if not gs.is_edge_calculated(e)]
 
-        node_discoverer = gs.get_node_discoverer(node.id)
+        node_discoverer = gs.get_node_discoverer(node)
         if node_discoverer is None:
             node_discoverer = "N/A"
 
         self.update_prop("Undiscovered succesors", len(undiscovered_edges))
         self.update_prop("Unfinished succesors", len(uncomplete_edges))
-        self.update_prop("Visible", gs.is_node_visible(node.id))
+        self.update_prop("Visible", gs.is_node_visible(node))
         self.update_prop("Discoverd by", node_discoverer)
 
 

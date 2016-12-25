@@ -133,7 +133,7 @@ class VisualGraphStats(GraphStats):
         GraphStats.__init__(self, graph)
         self.colors_count = colors_count
         self.colors = []
-        self.selected_node_id = None
+        self.selected_node = None
         self._set_colors()
 
     def _set_colors(self):
@@ -143,7 +143,7 @@ class VisualGraphStats(GraphStats):
             self.colors.append(utils.hex_to_rgb(next(cc)))
 
     def set_selected_node(self, node):
-        self.selected_node_id = node.get_id()
+        self.selected_node = node
 
     def set_edge_visibility(self, edge, val):
         edge_info = self._get_edge_info(edge)
@@ -158,7 +158,7 @@ class VisualGraphStats(GraphStats):
         GraphStats.reset(self)
         self._set_colors()
         self.visible_edges = {}
-        self.selected_node_id = None
+        self.selected_node = None
 
     def is_node_visible(self, node):
         return self.is_node_discovered(node)
@@ -168,7 +168,7 @@ class VisualGraphStats(GraphStats):
         return edge_info in self.visible_edges
 
     def is_selected_node(self, node):
-        return self.selected_node_id and self.selected_node_id == node.get_id()
+        return self.selected_node and self.selected_node == node
 
     def get_node_color(self, node):
         discoverer = self.get_node_discoverer(node)
@@ -203,6 +203,6 @@ class VisualGraphStats(GraphStats):
     def get_edge_arrow_color(self):
         return self.ARROW_COLOR
 
-    def get_selected_node_id(self):
-        return self.selected_node_id
+    def get_selected_node(self):
+        return self.selected_node
 
