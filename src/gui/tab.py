@@ -1,4 +1,5 @@
 import gtk
+import gobject
 import sys
 import paths
 import ntpath
@@ -1082,7 +1083,6 @@ class ScalabilityTab(CloseTab):
         self.sim_worker = worker.SimWorker(self.on_start,
                                            self.on_end,
                                            self.on_error)
-        self.scale_plot = None
         self.count = 0
         self.current = 0
         self.ydata = []
@@ -1093,17 +1093,18 @@ class ScalabilityTab(CloseTab):
         self.repeat_count = stochastic_repeat
         self.tick_step_val = 1
         self.progress_bar = gtk.ProgressBar()
+        self.scale_plot = None
 
     def build(self):
-        self._prepare_simulations()
-        self.tick_step_val = np.linspace(0, 1, self.count)
-        self.sim_worker.start()
-
         self.vbox = gtk.VBox()
         self.vbox.pack_start(gtk.HBox())
         self.vbox.pack_start(self.progress_bar, False)
         self.vbox.pack_start(gtk.HBox())
         return self.vbox
+
+    def post_build(self):
+        self._prepare_simulations()
+        self.sim_worker.start()
 
     def _prepare_simulations(self):
         for i in xrange(self.pr_min,
@@ -1122,7 +1123,14 @@ class ScalabilityTab(CloseTab):
                                             self.arguments)
                 self.sim_worker.put(sim)
 
-        self.count = self.sim_worker.q.qsize()
+        self.count = self.sim_worker.size()
+        self.tick_step_val = np.linspace(0, 1, self.count)
+
+    def _set_progress_bar_text(self, text):
+        self.progress_bar.set_text(text)
+
+    def _set_progress_bar_value(self, value):
+        self.progress_bar.set_fraction(value)
 
     def on_start(self, sim):
 
@@ -1133,17 +1141,17 @@ class ScalabilityTab(CloseTab):
             p.connect("log", log_callback)
 
         msg = "Simulating algorithm '{0}' with {1} processes\nTotal progress {2} / {3}"
-        self.progress_bar.set_text(msg.format(self.process_type,
-                                              sim.get_process_count(),
-                                              self.current,
-                                              self.count))
+        self._set_progress_bar_text(msg.format(self.process_type,
+                                               sim.get_process_count(),
+                                               self.current,
+                                               self.count))
 
     def on_end(self, sim):
         self.current += 1
         self.ydata.append(sim.ctx.env.now)
-        self.progress_bar.set_fraction(self.tick_step_val[self.current - 1])
+        self._set_progress_bar_value(self.tick_step_val[self.current - 1])
         msg = "Simulating algorithm '{0}' with {1} processes\nTotal progress {2} / {3}"
-        self.progress_bar.set_text(msg.format(self.process_type,
+        self._set_progress_bar_text(msg.format(self.process_type,
                                               sim.get_process_count(),
                                               self.current,
                                               self.count))
@@ -1152,22 +1160,22 @@ class ScalabilityTab(CloseTab):
 
     def on_error(self, err):
         msg = "In simulation was found error: '{0}'".format(err)
-        self.progress_bar.set_text(msg)
+        self._set_progress_bar_text(msg)
+        self._set_progress_bar_value(1.0)
         self.sim_worker.quit()
-        self.progress_bar.set_fraction(1.0)
 
     def show_results(self):
+        self.sim_worker.quit()
         yerr = None
         if self.stochastic:
             self.ydata, yerr = self._calculate_results()
 
-        
         self.scale_plot = plot.ScalabilityPlot(self.process_type,
-                                                self.pr_min,
-                                                self.pr_max,
-                                                self.pr_step,
-                                                self.ydata,
-                                                yerr)
+                                               self.pr_min,
+                                               self.pr_max,
+                                               self.pr_step,
+                                               self.ydata,
+                                               yerr)
         self.scale_plot.draw()
         self.remove(self.vbox)
 
