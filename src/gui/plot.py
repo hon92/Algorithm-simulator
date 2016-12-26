@@ -185,7 +185,7 @@ class LineSimplePlot(SimplePlot):
     def on_pick(self, e):
         leg_line = e.artist
         plot_line = self.lines_map.get(leg_line)
-        if plot_line:
+        if plot_line is not None:
             visible = not plot_line.get_visible()
             marker = plot_line.get_marker()
 
@@ -229,7 +229,7 @@ class BarSimplePlot(SimplePlot):
     def on_pick(self, e):
         rect = e.artist
         collection = self.bar_map.get(rect)
-        if collection:
+        if collection is not None:
             visible = not collection.get_visible()
             collection.set_visible(visible)
             if visible:
@@ -256,14 +256,15 @@ class HistSimplePlot(SimplePlot):
     def on_pick(self, e):
         rect = e.artist
         container = self.bar_map.get(rect)
-        if container:
+        if container is not None:
+            if rect.get_alpha() == 0.2:
+                rect.set_alpha(1.0)
+            else:
+                rect.set_alpha(0.2)
+
             for r in container:
                 visible = not r.get_visible()
                 r.set_visible(visible)
-                if visible:
-                    rect.set_alpha(1.0)
-                else:
-                    rect.set_alpha(0.2)
             self.redraw()
 
     def legend_mapping(self, ax):
@@ -537,18 +538,19 @@ class CalculatedPlot(HistSimplePlot):
 
             for _, _, edge_time, _, _, _, _ in calc_data:
                 xdata.append(edge_time)
+
+            color = next(color_cycler)
             if len(xdata) != 0:
                 min_v = min(xdata)
                 max_v = max(xdata)
                 if min_v == max_v:
-                    bins = int(max_v)
-                    if bins == 0:
-                        bins = [0]
+                    bins_v = int(max_v)
+                    bins = [bins_v]
                 else:
                     bins = np.linspace(min_v, max_v, num_step)
             else:
                 bins = [0]
-            color = next(color_cycler)
+                xdata = [0]
             self.axis.hist(xdata, bins = bins, histtype = 'bar', color = color)
             legend.append(mpatches.Patch(color=color, label = "p {0}".format(p.id)))
 
