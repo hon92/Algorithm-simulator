@@ -1,17 +1,18 @@
 import gtk
 import numpy as np
 import matplotlib as mpl
+mpl.use("Agg")
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import matplotlib.lines as mlines
 from matplotlib import style
-from gobject import gobject
-style.use("fivethirtyeight")
+import gobject
+
 from matplotlib.backends.backend_gtkagg import FigureCanvasGTKAgg as FigureCanvas
 from matplotlib.backends.backend_gtkagg import NavigationToolbar2GTKAgg as NavigationToolbar
 from misc import colors as color_pallete
 
-
+style.use("fivethirtyeight")
 version = int(mpl.__version__.replace(".", ""))
 
 if version >= 150:
@@ -926,8 +927,8 @@ class ScalabilityPlot(LineSimplePlot):
 
     def draw_plot(self):
         self.axis.errorbar(np.arange(self.pr_min,
-                                 self.pr_max,
-                                 self.pr_step),
+                                     self.pr_max,
+                                     self.pr_step),
                            self.ydata,
                            yerr = self.yerr,
                            label = self.process_type,
