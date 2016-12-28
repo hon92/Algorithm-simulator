@@ -12,7 +12,7 @@ class Worker(threading.Thread, EventSource):
         self.task_in_progress = None
 
     def solve_task(self, task):
-        self.task_complete(task)
+        self.task_complete()
 
     def run(self):
         while True:
@@ -28,20 +28,26 @@ class Worker(threading.Thread, EventSource):
 
     def quit(self):
         self.clear_tasks()
+        self.interrupt()
         self.put(None)
 
     def task_complete(self):
         self.q.task_done()
+        self.task_in_progress = None
 
     def task_error(self, error_message):
         self.q.task_done()
+        self.task_in_progress = None
 
     def clear_tasks(self):
         with self.q.mutex:
             self.q.queue.clear()
 
     def interrupt(self):
-        pass
+        self.task_in_progress = None
+
+    def size(self):
+        return self.q.qsize()
 
 
 class SimWorker(Worker):
@@ -53,12 +59,12 @@ class SimWorker(Worker):
 
     def solve_task(self, task):
         def sim_end(sim):
-            self.sim_end_cb(sim)
             self.task_complete()
+            self.sim_end_cb(sim)
 
         def sim_error(error):
-            self.sim_error_cb(error)
             self.task_complete()
+            self.sim_error_cb(error)
 
         task.connect("start", lambda s: gobject.idle_add(self.sim_start_cb, s, priority = PRIORITY_HIGH))
         task.connect("end", lambda s: gobject.idle_add(sim_end, s, priority = PRIORITY_HIGH))
