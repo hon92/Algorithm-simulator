@@ -9,6 +9,7 @@ import settings
 import simulationcontroller as sc
 import gladeloader as gl
 import numpy as np
+import collections
 from misc import timer
 from gui import worker
 from sim import simulation
@@ -954,6 +955,7 @@ class SummaryTab(CloseTab):
         CloseTab.__init__(self, window, "Summary tab")
         self.simulations = simulations.values()
         self.plots = []
+        self.data = self._collect_data()
 
     def build(self):
         builder = gl.GladeLoader("summary_tab").load()
@@ -961,18 +963,20 @@ class SummaryTab(CloseTab):
         self.notebook = builder.get_object("notebook")
         self.time_button = builder.get_object("time_rad_button")
         self.memory_button = builder.get_object("memory_rad_button")
+        return vbox
+
+    def post_build(self):
         self.time_button.connect("toggled", self.on_type_change, "time")
         self.memory_button.connect("toggled", self.on_type_change, "memory")
         self.time_button.set_active(True)
-        return vbox
 
     def _remove_tabs(self):
         for p in self.plots:
             p.dispose()
         self.plots = []
         tabs_count = self.notebook.get_n_pages()
-        for i in xrange(tabs_count):
-            self.notebook.remove_page(i)
+        for _ in xrange(tabs_count):
+            self.notebook.remove_page(-1)
 
     def on_type_change(self, button, name):
         if name not in ["time", "memory"]:
@@ -982,74 +986,74 @@ class SummaryTab(CloseTab):
             return
 
         self._remove_tabs()
-        groups = self._get_groups()
-        if len(groups) == 0:
-            return
 
-        filenames = set()
-        for s in self.simulations:
-            filenames.add(s.ctx.graph.filename)
-
-        for filename in filenames:
-            data = []
-            ticks = []
-            for g in groups:
-                if g.filename == filename:
-                    if name == "memory":
-                        data.append(list(g.memory))
-                    else:
-                        data.append(list(g.times))
-                    ticks.append(g.get_label())
+        for filename, groups in self.data.iteritems():
+            ticks = [g.get_label() for g in groups]
 
             if name == "memory":
-                summary_plot = plot.MemorySummaryPlot(data, ticks)
+                memory_data = [g.get_memory_values() for g in groups]
+                summary_plot = plot.MemorySummaryPlot(memory_data, ticks)
             else:
-                summary_plot = plot.TimeSummaryPlot(data, ticks)
+                time_data = [g.get_time_values() for g in groups]
+                summary_plot = plot.TimeSummaryPlot(time_data, ticks)
+
             summary_plot.draw()
             self.plots.append(summary_plot)
             summ_widget = summary_plot.get_widget_with_navbar(self.win)
             self.notebook.append_page(summ_widget, gtk.Label(ntpath.basename(filename)))
         self.notebook.show_all()
 
-    def _get_groups(self):
+    def _collect_data(self):
         class Group():
-            def __init__(self, process_type, process_count, args, filename):
+            def __init__(self, process_type, process_count, args):
                 self.process_type = process_type
                 self.process_count = process_count
                 self.args = args
-                self.filename = filename
-                self.memory = set()
-                self.times = set()
+                self.memory_values = set()
+                self.time_values = set()
 
             def __eq__(self, g):
                 return self.process_type == g.process_type and \
                     self.process_count == g.process_count and \
-                    self.args == g.args and \
-                    self.filename == g.filename
+                    self.args == g.args
 
             def get_label(self):
                 return "{0}({1})\n{2}".format(self.process_type,
                                               self.process_count,
                                               self.args)
 
-        groups = []
+            def add_values(self, time_value, memory_value):
+                self.time_values.add(time_value)
+                self.memory_values.add(memory_value)
+
+            def get_memory_values(self):
+                return list(self.memory_values)
+
+            def get_time_values(self):
+                return list(self.time_values)
+
+        data = collections.OrderedDict()
 
         for sim in self.simulations:
             f, pt, pc, a, t, m = self._get_sim_info(sim)
-            group = Group(pt, pc, a, f)
-            found = False
-            for g in groups:
-                if g == group:
-                    found = True
-                    g.times.add(t)
-                    g.memory.add(m)
-                    break
-            if not found:
-                group.times.add(t)
-                group.memory.add(m)
-                groups.append(group)
+            groups = data.get(f)
+            group = Group(pt, pc, a)
+            group.add_values(t, m)
 
-        return groups
+            if groups is None:
+                data[f] = [group]
+            else:
+                found = False
+                for g in groups:
+                    if group == g:
+                        g.add_values(t, m)
+                        found = True
+                        break
+
+                if not found:
+                    groups.append(group)
+
+        return data
 
     def _get_sim_info(self, sim):
         filename = sim.ctx.graph.filename
@@ -1065,6 +1069,8 @@ class SummaryTab(CloseTab):
             for _, size in data[mem_usage_entry]:
                 if size > memory_peak:
                     memory_peak = size
+        else:
+            raise Exception("Monitor 'GlobalMemoryMonitor' not available")
         return filename, process_type, process_count, args, sim_time, memory_peak
 
     def close(self):
