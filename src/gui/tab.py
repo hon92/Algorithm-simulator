@@ -978,6 +978,9 @@ class SummaryTab(CloseTab):
         if name not in ["time", "memory"]:
             raise Exception("Unknown radio button type")
 
+        if not button.get_active():
+            return
+
         self._remove_tabs()
         groups = self._get_groups()
         if len(groups) == 0:
