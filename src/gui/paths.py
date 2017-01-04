@@ -5,7 +5,7 @@ GUI_PATH = os.path.dirname(os.path.abspath(__file__))
 SRC_PATH = os.path.dirname(GUI_PATH)
 ROOT = os.path.dirname(SRC_PATH)
 RESOURCES = os.path.join(SRC_PATH, "resources")
-CONFIG_FILE_PATH = os.path.dirname(ROOT)
+CONFIG_FILE_PATH = ROOT
 ICONS_PATH = os.path.join(RESOURCES, "icons", "")
 GLADE_DIALOG_DIRECTORY = os.path.join(RESOURCES, "glade_dialogs", "")
 
