@@ -1,3 +1,4 @@
+import re
 from xml.etree import ElementTree
 from xml.dom import minidom
 
@@ -13,6 +14,25 @@ def hex_to_rgb(value):
 
 def rgb_to_hex(r, g, b):
     return '#%02x%02x%02x' % (r, g, b)
+
+def color_from_string(str_color):
+        pattern = "\((\d+),\s(\d+),\s(\d+)\)"
+        result = re.match(pattern, str_color)
+        if result is None:
+            raise Exception("Unknown string color in CANVAS_BACKGROUND_COLOR")
+
+        r = int(result.group(1))
+        g = int(result.group(2))
+        b = int(result.group(3))
+        if r < 0 or r > 255 or g < 0 or g > 255 or b < 0 or b > 255:
+            raise Exception("Values in color must be in range(0, 255).")
+
+        return (r, g, b)
+
+def color_to_string(color):
+    return "({0}, {1}, {2})".format(color[0],
+                                    color[1],
+                                    color[2])
 
 def get_inverted_color(color):
     hh = rgb_to_hex(*color)

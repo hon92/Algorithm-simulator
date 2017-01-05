@@ -1,5 +1,4 @@
 import gtk
-import gobject
 import sys
 import paths
 import ntpath
@@ -11,6 +10,7 @@ import gladeloader as gl
 import numpy as np
 import collections
 from misc import timer
+from misc import utils
 from gui import worker
 from sim import simulation
 from gui.dialogs import dialog
@@ -516,13 +516,12 @@ class SimulationDetailTab(CloseTab):
 
 class VisualSimulationTab(CloseTab):
 
-    CANVAS_BACKGROUND_COLOR = (247, 207, 45)
-
     def __init__(self, window, title, simulation):
         CloseTab.__init__(self, window, title)
         self.simulation = simulation
         self.anim_plot = plot.VizualSimPlotAnim()
         self.node_selector = NodeSelector(self.simulation.ctx.graph)
+        self.canvas_color = utils.color_from_string(settings.get("CANVAS_BACKGROUND_COLOR"))
 
     def build(self):
         builder = gl.GladeLoader("visual_sim_tab").load()
@@ -557,7 +556,7 @@ class VisualSimulationTab(CloseTab):
     def init_canvas(self):
         canvas = Canvas()
         canvas.set_events(gtk.gdk.BUTTON_PRESS_MASK)
-        c = self.CANVAS_BACKGROUND_COLOR
+        c = self.canvas_color
         canvas.modify_bg(gtk.STATE_NORMAL,
                          gtk.gdk.Color(c[0] * 256,c[1] * 256,c[2] * 256))
         canvas.connect("configure_event", lambda w, e: self.redraw())
@@ -578,7 +577,7 @@ class VisualSimulationTab(CloseTab):
         self.anim_plot.show_navbar(button.get_active())
 
     def redraw(self):
-        self.canvas.set_color(*self.CANVAS_BACKGROUND_COLOR)
+        self.canvas.set_color(*self.canvas_color)
         self.canvas.draw_rectangle(0,
                                    0,
                                    self.canvas.allocation.width,

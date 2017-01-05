@@ -33,6 +33,7 @@ CONSOLE_FONT_DEF = "Calibri 14"
 CONSOLE_HEIGHT_DEF = 100
 WINDOW_WIDTH_DEF = 1280
 WINDOW_HEIGHT_DEF = 720
+CANVAS_BACKGROUND_COLOR = "(247, 207, 45)"
 
 #editable by user via config file
 user_settings = { "VIZ_SIMULATION_TIMER": VIZ_SIMULATION_TIMER_DEF,
@@ -40,7 +41,8 @@ user_settings = { "VIZ_SIMULATION_TIMER": VIZ_SIMULATION_TIMER_DEF,
                   "CONSOLE_FONT": CONSOLE_FONT_DEF,
                   "CONSOLE_HEIGHT": CONSOLE_HEIGHT_DEF,
                   "WINDOW_WIDTH": WINDOW_WIDTH_DEF,
-                  "WINDOW_HEIGHT": WINDOW_HEIGHT_DEF
+                  "WINDOW_HEIGHT": WINDOW_HEIGHT_DEF,
+                  "CANVAS_BACKGROUND_COLOR": CANVAS_BACKGROUND_COLOR
                   }
 
 default_scripts = []
@@ -93,6 +95,10 @@ def _load_settings(config_filename):
                         raise Exception("Value " + key + " is smaller then min value")
 
             user_settings[key] = val
+
+        #check if color string is correct. Exception is raised if is invalid.
+        color = utils.color_from_string(get("CANVAS_BACKGROUND_COLOR"))
+
         scripts_el = root.find("scripts")
         for script_el in scripts_el.findall("script"):
             script_path = script_el.get("value")
@@ -249,6 +255,11 @@ class VisualSimSettingPage(SettingPage):
         vbox = builder.get_object("vbox")
         self.sim_timer_spin = builder.get_object("sim_timer_spin")
         self.nodes_spin = builder.get_object("nodes_spin")
+        self.color_box = builder.get_object("color_box")
+        def_color = get("CANVAS_BACKGROUND_COLOR")
+        color = utils.color_from_string(def_color)
+        self.color = gtk.gdk.color_parse(utils.rgb_to_hex(*color))
+        self.color_box.modify_bg(gtk.STATE_NORMAL, self.color)
         self.sim_timer_spin.set_adjustment(gtk.Adjustment(get("VIZ_SIMULATION_TIMER"),
                                                 VIZ_SIMULATION_TIMER_MIN,
                                                 VIZ_SIMULATION_TIMER_MAX,
@@ -259,6 +270,8 @@ class VisualSimSettingPage(SettingPage):
                                                  MAX_VISIBLE_GRAPH_NODES_MAX,
                                                  1,
                                                  10))
+        self.color_button = builder.get_object("pick_color_button")
+        self.color_button.connect("clicked", self.on_pick_color_button_clicked)
         return vbox
 
     def on_apply(self):
@@ -266,6 +279,7 @@ class VisualSimSettingPage(SettingPage):
         nodes_count = self.nodes_spin.get_value_as_int()
         user_settings["VIZ_SIMULATION_TIMER"] = sim_timer
         user_settings["MAX_VISIBLE_GRAPH_NODES"] = nodes_count
+        user_settings["CANVAS_BACKGROUND_COLOR"] = utils.color_to_string(self.color)
 
     def on_restore(self):
         self.sim_timer_spin.set_value(VIZ_SIMULATION_TIMER_DEF)
@@ -273,6 +287,19 @@ class VisualSimSettingPage(SettingPage):
 
         user_settings["VIZ_SIMULATION_TIMER"] = VIZ_SIMULATION_TIMER_DEF
         user_settings["MAX_VISIBLE_GRAPH_NODES"] = MAX_VISIBLE_GRAPH_NODES_DEF
+        user_settings["CANVAS_BAGKGROUND_COLOR"] = CANVAS_BACKGROUND_COLOR
+
+    def on_pick_color_button_clicked(self, button):
+        color_selection = gtk.ColorSelectionDialog("Pick color")
+        result = color_selection.run()
+        if result == gtk.RESPONSE_OK:
+            selected_color = color_selection.colorsel.get_current_color()
+            self.color_box.modify_bg(gtk.STATE_NORMAL, selected_color)
+            self.color = (selected_color.red / 256,
+                          selected_color.green / 256,
+                          selected_color.blue / 256)
+
+        color_selection.destroy()
 
 
 class ScriptSettingPage(SettingPage):
