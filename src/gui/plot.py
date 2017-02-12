@@ -471,7 +471,7 @@ class ProcessesLifePlot(BarSimplePlot):
 
 class DiscoveredPlot(LineSimplePlot):
     def __init__(self, processes):
-        LineSimplePlot.__init__(self, "Discovered nodes", "simulation time", "nodes discovered")
+        LineSimplePlot.__init__(self, "Discovered edges", "simulation time", "edges discovered")
         self.processes = processes
 
     def draw_plot(self):
@@ -494,9 +494,9 @@ class DiscoveredPlot(LineSimplePlot):
 class CummulativeSumPlot(LineSimplePlot):
     def __init__(self, processes):
         LineSimplePlot.__init__(self,
-                                "Cummulative sum of discovered nodes",
+                                "Cummulative sum of discovered edges",
                                 "simulation time",
-                                "nodes discovered")
+                                "edges discovered")
         self.processes = processes
 
     def draw_plot(self):
