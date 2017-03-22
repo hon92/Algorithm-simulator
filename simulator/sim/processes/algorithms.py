@@ -21,12 +21,6 @@ task to another process which is waiting for work."
     def run(self):
         gs = self.ctx.graph_stats
 
-        mm = self.ctx.monitor_manager
-
-        def test(a,b):
-            print a, b
-
-        mm.connect("p0_time_stamp", test)
         while True:
             self.clock.tick()
             if self.storage.get_size() > 0:
