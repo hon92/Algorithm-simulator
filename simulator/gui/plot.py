@@ -10,7 +10,7 @@ import gobject
 
 from matplotlib.backends.backend_gtkagg import FigureCanvasGTKAgg as FigureCanvas
 from matplotlib.backends.backend_gtkagg import NavigationToolbar2GTKAgg as NavigationToolbar
-from misc import colors as color_pallete
+from simulator.misc import colors as color_pallete
 
 style.use("fivethirtyeight")
 version = int(mpl.__version__.replace(".", ""))
@@ -546,7 +546,7 @@ class CalculatedPlot(HistSimplePlot):
                 max_v = max(xdata)
                 if min_v == max_v:
                     bins_v = int(max_v)
-                    bins = [bins_v]
+                    bins = [0, bins_v]
                 else:
                     bins = np.linspace(min_v, max_v, num_step)
             else:

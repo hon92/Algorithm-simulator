@@ -1,7 +1,7 @@
 import gtk
 import paths
 import settings
-from misc import timer
+from simulator.misc import timer
 
 buttons_conf = {"run": ("Run new", "Run simulation", "Play-24.png"),
                 "step": ("Step", "Run one step in simulation", "Left Footprint-24.png"),

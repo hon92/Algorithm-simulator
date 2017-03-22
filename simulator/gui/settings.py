@@ -4,12 +4,12 @@ import ntpath
 import gtk
 import sys
 import gladeloader as gl
-from misc import utils
+from simulator.misc import utils
 from xml.etree.cElementTree import Element, SubElement, parse
 from pango import FontDescription
-from gui.events import EventSource
-from sim import processfactory as pf
-from gui.dialogs import dialog
+from events import EventSource
+from simulator.sim import processfactory as pf
+from dialogs import dialog
 
 WINDOW_TITLE = "Process checker"
 VERSION = "2.0"
@@ -72,9 +72,9 @@ def _load_settings(config_filename):
         if root.get("version") != VERSION:
             raise Exception("Invalid version of settings file")
         sets_list = root.findall("set")
-        for set in sets_list:
-            key = set.get("name")
-            val = set.get("value")
+        for s in sets_list:
+            key = s.get("name")
+            val = s.get("value")
             is_value = True
             try:
                 val = int(val)
@@ -97,7 +97,7 @@ def _load_settings(config_filename):
             user_settings[key] = val
 
         #check if color string is correct. Exception is raised if is invalid.
-        color = utils.color_from_string(get("CANVAS_BACKGROUND_COLOR"))
+        utils.color_from_string(get("CANVAS_BACKGROUND_COLOR"))
 
         scripts_el = root.find("scripts")
         for script_el in scripts_el.findall("script"):
@@ -287,7 +287,7 @@ class VisualSimSettingPage(SettingPage):
 
         user_settings["VIZ_SIMULATION_TIMER"] = VIZ_SIMULATION_TIMER_DEF
         user_settings["MAX_VISIBLE_GRAPH_NODES"] = MAX_VISIBLE_GRAPH_NODES_DEF
-        user_settings["CANVAS_BAGKGROUND_COLOR"] = CANVAS_BACKGROUND_COLOR
+        user_settings["CANVAS_BACKGROUND_COLOR"] = CANVAS_BACKGROUND_COLOR
 
     def on_pick_color_button_clicked(self, button):
         color_selection = gtk.ColorSelectionDialog("Pick color")
@@ -340,11 +340,11 @@ class ScriptSettingPage(SettingPage):
                 print ex
 
     def on_remove_script(self, w):
-        iter = self._get_selected_row_iter()
-        if iter:
-            script_path = self.liststore[iter][1]
+        i = self._get_selected_row_iter()
+        if i:
+            script_path = self.liststore[i][1]
             pf.process_factory.remove_script(script_path)
-            self.liststore.remove(iter)
+            self.liststore.remove(i)
 
     def _load_scripts(self):
         self.liststore.clear()

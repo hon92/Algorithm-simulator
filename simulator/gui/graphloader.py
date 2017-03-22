@@ -1,7 +1,7 @@
 import xml.etree.cElementTree as ET
+import graph as g
 from xml.etree.ElementTree import QName
-from gui import graph as g
-from gui.exceptions import GraphException, VisibleGraphException
+from exceptions import GraphException, VisibleGraphException
 
 
 class AbstractGraphLoader():

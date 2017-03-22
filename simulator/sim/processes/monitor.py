@@ -1,5 +1,5 @@
 import re
-from src.gui.events import EventSource
+from simulator.gui.events import EventSource
 
 
 class MonitorManager():

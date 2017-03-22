@@ -1,4 +1,4 @@
-from misc import utils, colors
+from simulator.misc import utils, colors
 
 
 class GraphStats():

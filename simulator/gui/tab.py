@@ -9,15 +9,16 @@ import simulationcontroller as sc
 import gladeloader as gl
 import numpy as np
 import collections
-from misc import timer
-from misc import utils
-from gui import worker
-from sim import simulation
-from gui.dialogs import dialog
+import worker
+import statistics
+import exceptions as exc
+from simulator.misc import timer
+from simulator.misc import utils
+from simulator.sim import simulation
+from dialogs import dialog
 from canvas import Canvas
 from nodeselector import NodeSelector
-from gui import statistics
-from sim import processfactory as pf
+from simulator.sim import processfactory as pf
 
 
 class Tab(gtk.VBox):
@@ -109,6 +110,11 @@ class ProjectTab(Tab):
         self.params = []
         pf.process_factory.connect("algorithm_added", self._on_algorithm_added)
         pf.process_factory.connect("algorithm_remove", self._on_algorithm_remove)
+        pf.process_factory.connect("process_model_added", self._on_process_model_added)
+        pf.process_factory.connect("network_model_added", self._on_network_model_added)
+        pf.process_factory.connect("process_model_remove", self._on_process_model_remove)
+        pf.process_factory.connect("network_model_remove", self._on_network_model_remove)
+        pf.process_factory.connect("info", self._on_info)
 
     def build(self):
         builder = gl.GladeLoader("project_tab").load()
@@ -153,7 +159,7 @@ class ProjectTab(Tab):
                 self.parameters_box.show_all()
                 return
 
-            for param, (value, type) in params.iteritems():
+            for param, (value, param_type) in params.iteritems():
                 hbox = gtk.HBox()
                 hbox.pack_start(gtk.Label(param))
                 entry = gtk.Entry()
@@ -161,7 +167,7 @@ class ProjectTab(Tab):
                 hbox.pack_start(entry)
                 hbox.show_all()
                 self.parameters_box.pack_start(hbox, padding = 10)
-                self.params.append((param, entry, type))
+                self.params.append((param, entry, param_type))
 
         def on_alg_change(w):
             active_text = w.get_active_text()
@@ -218,6 +224,9 @@ class ProjectTab(Tab):
         for filename in self.project.get_files():
             self.add_graph(filename)
 
+    def _on_info(self, message, msg_type):
+        self.win.console.writeln(message, msg_type)
+
     def _on_algorithm_added(self, process_factory, alg):
         self.process_combobox.append_text(alg.NAME)
         if self.process_combobox.get_active() == -1:
@@ -228,6 +237,30 @@ class ProjectTab(Tab):
         for row in model:
             if row[0] == alg.NAME:
                 self.process_combobox.remove_text(row.path[0])
+                break
+
+    def _on_process_model_added(self, process_factory, model):
+        self.process_model_combobox.append_text(model.get_name())
+        if self.process_model_combobox.get_active() == -1:
+            self.process_model_combobox.set_active(0)
+
+    def _on_process_model_remove(self, process_factory, model):
+        model = self.process_model_combobox.get_model()
+        for row in model:
+            if row[0] == model.get_name():
+                self.process_model_combobox.remove_text(row.path[0])
+                break
+
+    def _on_network_model_added(self, process_factory, model):
+        self.net_model_combobox.append_text(model.get_name())
+        if self.net_model_combobox.get_active() == -1:
+            self.net_model_combobox.set_active(0)
+
+    def _on_network_model_remove(self, process_factory, model):
+        model = self.net_model_combobox.get_model()
+        for row in model:
+            if row[0] == model.get_name():
+                self.net_model_combobox.remove_text(row.path[0])
                 break
 
     def add_graph(self, filename):
@@ -244,9 +277,11 @@ class ProjectTab(Tab):
         graph_file = dialog.Dialog.get_factory("xml").open("Open graph file")
 
         if graph_file:
-            added = self.project.add_file(graph_file)
-            if added:
+            try:
+                self.project.add_file(graph_file)
                 self.add_graph(graph_file)
+            except exc.GraphException as ex:
+                self.win.console.writeln(ex.message, "err")
 
     def remove_graph_file(self):
         for row in self.liststore:
@@ -776,10 +811,10 @@ class SimulationsTab(Tab):
         if new_val == 1.0:
             return False
 
-        iter = self.get_iter_at(self.current)
-        if iter:
-            self.liststore[iter][3] =  int(new_val * 100)
-            self.liststore[iter][4] = self.RUNNING
+        i = self.get_iter_at(self.current)
+        if i:
+            self.liststore[i][3] =  int(new_val * 100)
+            self.liststore[i][4] = self.RUNNING
             return True
         else:
             return False
@@ -819,12 +854,12 @@ class SimulationsTab(Tab):
                     memory_peak = storage_size
 
         self.completed_simulations[self.current] = simulation
-        iter = self.get_iter_at(self.current)
-        if iter:
-            self.liststore[iter][3] = 100
-            self.liststore[iter][4] = self.COMPLETED
-            self.liststore[iter][5] = simulation.ctx.env.now
-            self.liststore[iter][6] = memory_peak
+        i = self.get_iter_at(self.current)
+        if i:
+            self.liststore[i][3] = 100
+            self.liststore[i][4] = self.COMPLETED
+            self.liststore[i][5] = simulation.ctx.env.now
+            self.liststore[i][6] = memory_peak
         self.current += 1
         self._update_title()
 
@@ -845,12 +880,12 @@ class SimulationsTab(Tab):
                                                     "err")
             status_text = self.ERROR
 
-        iter = self.get_iter_at(self.current)
-        if iter:
-            self.liststore[iter][3] = 0
-            self.liststore[iter][4] = status_text
-            self.liststore[iter][5] = 0
-            self.liststore[iter][6] = 0
+        i = self.get_iter_at(self.current)
+        if i:
+            self.liststore[i][3] = 0
+            self.liststore[i][4] = status_text
+            self.liststore[i][5] = 0
+            self.liststore[i][6] = 0
         self.current += 1
         self._update_title()
 
@@ -869,15 +904,15 @@ class SimulationsTab(Tab):
         Tab.close(self)
 
     def on_sim_detail(self):
-        iter = self.get_selected_row_iter()
-        if iter:
-            if self.liststore[iter][4] == self.COMPLETED:
-                p = self.liststore[iter]
+        i = self.get_selected_row_iter()
+        if i:
+            if self.liststore[i][4] == self.COMPLETED:
+                p = self.liststore[i]
                 sim = self.completed_simulations[p.path[0]]
-                filename = self.liststore[iter][0]
+                filename = self.liststore[i][0]
                 name = ntpath.basename(filename)
-                process_type = self.liststore[iter][1]
-                process_count = self.liststore[iter][2]
+                process_type = self.liststore[i][1]
+                process_count = self.liststore[i][2]
                 tab_title = "{0} - {1}({2})".format(name,
                                                     process_type,
                                                     process_count)
@@ -888,10 +923,10 @@ class SimulationsTab(Tab):
                 self.win.create_tab(simulator_tab)
 
     def on_sim_export(self):
-        iter = self.get_selected_row_iter()
-        if iter:
-            if self.liststore[iter][4] == self.COMPLETED:
-                p = self.liststore[iter]
+        i = self.get_selected_row_iter()
+        if i:
+            if self.liststore[i][4] == self.COMPLETED:
+                p = self.liststore[i]
                 sim = self.completed_simulations[p.path[0]]
                 new_file = dialog.Dialog.get_factory("csv").save_as("Save simulation detail as")
                 if new_file:
@@ -934,9 +969,9 @@ class SimulationsTab(Tab):
             self.win.console.writeln(msg.format(new_file))
 
     def on_cancel(self):
-        iter = self.get_selected_row_iter()
-        if iter:
-            if self.liststore[iter][4] == self.RUNNING:
+        i = self.get_selected_row_iter()
+        if i:
+            if self.liststore[i][4] == self.RUNNING:
                 if self.current_sim:
                     self.current_sim.stop()
 

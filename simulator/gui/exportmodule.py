@@ -71,11 +71,11 @@ class CSVExportDataModule(ExportDataModule):
             for pr in processes:
                 lines.append(e)
                 md = measured_data[pr.id]
-                for dict in md:
+                for d in md:
                     lines.append(e)
-                    for entry in dict:
+                    for entry in d:
                         lines.append(e)
-                        values = dict[entry]
+                        values = d[entry]
                         if len(values) > i:
                             for vv in values[i]:
                                 lines.append(v.format(vv))

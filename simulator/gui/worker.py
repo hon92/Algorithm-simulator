@@ -1,6 +1,6 @@
 import threading
 import Queue
-from gui.events import EventSource
+from events import EventSource
 from gobject import gobject, PRIORITY_HIGH
 
 class Worker(threading.Thread, EventSource):

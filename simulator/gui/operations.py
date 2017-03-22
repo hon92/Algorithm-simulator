@@ -4,7 +4,7 @@ import events
 import graphgenerator
 import tab
 from dialogs import dialog
-from sim import processfactory as pf
+from simulator.sim import processfactory as pf
 
 
 class Operation(events.EventSource):
@@ -116,7 +116,7 @@ class ScalabilityDialog(Operation):
                 return
 
             self.params = []
-            for param, (value, type) in params.iteritems():
+            for param, (value, param_type) in params.iteritems():
                 hbox = gtk.HBox()
                 hbox.pack_start(gtk.Label(param))
                 entry = gtk.Entry()
@@ -124,7 +124,7 @@ class ScalabilityDialog(Operation):
                 hbox.pack_start(entry, padding = 10)
                 hbox.show_all()
                 parameters_vbox.pack_start(hbox, False, padding = 10)
-                self.params.append((param, entry, type))
+                self.params.append((param, entry, param_type))
 
         def on_process_change(combobox):
             process_text = combobox.get_active_text()

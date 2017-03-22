@@ -1,4 +1,8 @@
 *.pyc
-tests/
-
-gui/grafy/
+*.dot
+*.xml
+*.svg
+*.cfg
+build/
+dist/
+*.db

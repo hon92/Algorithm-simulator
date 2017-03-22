@@ -1,8 +1,8 @@
 import os
 from random import Random
-from gui.graph import Edge, Node, Graph
+from graph import Edge, Node, Graph
 from xml.etree.cElementTree import Element, SubElement
-from misc import utils
+from simulator.misc import utils
 
 
 class GraphGenerator():

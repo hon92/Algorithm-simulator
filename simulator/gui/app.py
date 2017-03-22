@@ -1,16 +1,19 @@
 import paths
 import sys
-sys.path.insert(0, paths.SRC_PATH)
+sys.path.insert(0, paths.ROOT)
 import gobject
 import gtk
 import window
 import tab
 import appargs
 import operations
-from gui.dialogs import dialog
-from gui.projectloader import ProjectLoader
+import settings
+import exceptions as exc
+from dialogs import dialog
+from projectloader import ProjectLoader
 
 gobject.threads_init()
+settings.init()
 
 
 class App():
@@ -19,7 +22,7 @@ class App():
         self.window = window.Window(self)
         self.app_args = appargs.AppArgs(self, args)
         self.app_args.solve()
-        self.window.create_tab(tab.WelcomeTab(self.window, "Welcome tab"))
+        #self.window.create_tab(tab.WelcomeTab(self.window, "Welcome tab"))
 
     def run(self):
         self.window.show()
@@ -63,7 +66,7 @@ class App():
                 self.window.console.writeln(msg)
             except IOError as ex:
                 raise Exception("Project file error: {0}".format(ex))
-            except Exception as ex:
+            except exc.ProjectException as ex:
                 self.window.console.writeln("Project is corrupted ({0})".format(ex.message), "err")
 
     def _open_project(self, project):
@@ -73,6 +76,7 @@ class App():
         simulations_tab = tab.SimulationsTab(self.window, project)
         self.window.create_tab(project_tab)
         self.window.create_tab(simulations_tab)
+        self.window.switch_to_tab(project_tab)
 
     def save_project(self):
         if self.project:

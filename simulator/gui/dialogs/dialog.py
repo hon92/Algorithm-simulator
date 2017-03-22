@@ -1,5 +1,5 @@
 import gtk
-from gui import paths
+from simulator.gui import paths
 
 
 class Dialog():

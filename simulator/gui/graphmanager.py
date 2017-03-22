@@ -4,7 +4,7 @@ import dot
 import subprocess
 import os
 import collections
-from gui import exceptions as ex
+import exceptions as ex
 
 
 class GraphManager():

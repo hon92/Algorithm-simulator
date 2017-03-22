@@ -2,7 +2,7 @@ import gtk
 import pango
 import paths
 import settings
-from gui.dialogs import dialog
+from dialogs import dialog
 
 
 class Window(gtk.Window):
@@ -138,7 +138,7 @@ class Console(gtk.HBox):
         self.textview.set_editable(False)
         self.buffer.create_tag("out", foreground = "black")
         self.buffer.create_tag("err", foreground = "red")
-        self.buffer.create_tag("warn", foreground = "yellow")
+        self.buffer.create_tag("warn", foreground = gtk.gdk.color_parse("#FFD300"))
         self._create_content()
 
     def _create_content(self):

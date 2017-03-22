@@ -2,7 +2,7 @@ import argparse
 import sys
 import json
 from projectloader import ProjectLoader
-from sim import processfactory as pf
+from simulator.sim import processfactory as pf
 
 
 class AppArgs:

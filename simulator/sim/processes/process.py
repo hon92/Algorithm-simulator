@@ -1,8 +1,8 @@
 import simpy
-from gui.events import EventSource
-from collections import deque
 import gobject
 import monitor
+from simulator.gui.events import EventSource
+from collections import deque
 
 
 class ProcessContext():
@@ -276,7 +276,7 @@ class Communicator(EventSource):
                     return True
             return False
 
-        def any(msg):
+        def any_target(msg):
             return True
 
         if type(source) is list:
@@ -286,7 +286,7 @@ class Communicator(EventSource):
         elif source:
             evt = self._msg_store.get(match)
         else:
-            evt = self._msg_store.get(any)
+            evt = self._msg_store.get(any_target)
 
         if evt.triggered:
             return evt.value

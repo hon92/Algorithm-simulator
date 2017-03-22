@@ -8,7 +8,7 @@ setup(name='Algorithm simulator',
       url='https://github.com/hon92/Algorithm-simulator',
       packages=find_packages(),
       package_data = {
-            "src" : ["resources/icons/*.png", "resources/glade_dialogs/*.glade"]
+            "simulator" : ["resources/icons/*.png", "resources/glade_dialogs/*.glade"]
       },
-      data_files = [("", ["__main__.py"])]
+      data_files = [("", ["run.py"])]
      )

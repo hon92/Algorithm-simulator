@@ -2,9 +2,11 @@ import importlib
 import imp
 import inspect
 import collections
-from sim.processes import process
-from src.gui.events import EventSource
-from src.sim.processes import model
+import os
+from simulator.gui import paths
+from processes import process
+from simulator.gui.events import EventSource
+from processes import model
 
 
 class ProcessFactory(EventSource):
@@ -12,6 +14,11 @@ class ProcessFactory(EventSource):
         EventSource.__init__(self)
         self.register_event("algorithm_added")
         self.register_event("algorithm_remove")
+        self.register_event("process_model_added")
+        self.register_event("network_model_added")
+        self.register_event("process_model_remove")
+        self.register_event("network_model_remove")
+        self.register_event("info")
         self.available_processes = []
         self.scripts = []
         self.network_models = collections.OrderedDict()
@@ -30,8 +37,6 @@ class ProcessFactory(EventSource):
             raise Exception("Process has to have DESCRIPTION attribute")
         if not hasattr(loaded_class, "PARAMS"):
             raise Exception("Process has to have PARAMS attribute")
-        if not issubclass(loaded_class, process.Process):
-            raise Exception("Class has to extend from 'Process' class")
 
     def get_processes_names(self):
         return [p.NAME for p in self.available_processes]
@@ -70,7 +75,7 @@ class ProcessFactory(EventSource):
     def load_from_script(self, script):
         if script in self.scripts:
             msg = "Script '{0}' already loaded"
-            print msg.format(script)
+            self.fire("info", msg.format(script), "warn")
             return
 
         loaded_class_names = [c.NAME for c in self.available_processes]
@@ -81,16 +86,16 @@ class ProcessFactory(EventSource):
             if c.NAME not in loaded_class_names:
                 self.available_processes.append(c)
                 self.fire("algorithm_added", self, c)
-                print "Added algorithm '{0}'".format(c.NAME)
+                self.fire("info", "Added algorithm '{0}'".format(c.NAME), "out")
                 added = True
             else:
-                print "Algorithm '{0}' is already loaded".format(c.NAME)
+                self.fire("info", "Algorithm '{0}' is already loaded".format(c.NAME), "warn")
                 continue
 
         if added:
             self.scripts.append(script)
         else:
-            print "No new algorithms found in '{}'" + script
+            self.fire("info", "No new algorithms found in '{}'" + script, "warn")
 
     def get_scripts(self):
         return self.scripts
@@ -117,22 +122,32 @@ class ProcessFactory(EventSource):
 
         for class_name, _ in inspect.getmembers(module, inspect.isclass):
             clazz = getattr(module, class_name)
+
+            if not issubclass(clazz, process.Process):
+                self.fire("info",
+                          "Class '{0}' was skipped because algorithm class has to extend from 'Process' class".format(clazz),
+                          "warn")
+                continue
             try:
                 self._class_check(clazz)
                 classes.append(clazz)
                 delattr(module, class_name)
             except Exception as ex:
                 err_msg = "Class '{0}' from file '{1}' was skipped because {2}"
-                print err_msg.format(class_name, script, ex.message)
+                self.fire("info", err_msg.format(class_name, script, ex.message), "err")
                 delattr(module, class_name)
                 continue
         return classes
 
     def add_network_model(self, model):
-        self.network_models[model.get_name()] = model
+        if not self.network_models.get(model.get_name()):
+            self.network_models[model.get_name()] = model
+            self.fire("network_model_added", self, model)
 
     def add_process_model(self, model):
-        self.process_models[model.get_name()] = model
+        if not self.process_models.get(model.get_name()):
+            self.process_models[model.get_name()] = model
+            self.fire("process_model_added", self, model)
 
     def get_network_model(self, name):
         return self.network_models.get(name)
@@ -162,6 +177,11 @@ class ProcessFactory(EventSource):
 
 
 process_factory = ProcessFactory()
+process_factory.load_from_script(os.path.join(paths.SRC_PATH,
+                                              "sim",
+                                              "processes",
+                                              "algorithms.py"))
+
 process_factory.add_process_model(model.DefaultProcessModel())
 process_factory.add_network_model(model.DefaultNetworkModel())
 process_factory.add_network_model(model.SlowNetworkModel())

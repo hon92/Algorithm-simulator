@@ -1,6 +1,6 @@
 import os
 import graphmanager
-from gui import exceptions as exc
+import exceptions as exc
 
 
 class Project():
@@ -35,21 +35,17 @@ class Project():
 
     def add_file(self, filename):
         if self.graph_manager.contain_filename(filename):
-            self.fire("error", "'{0}' is already in project".format(filename))
-            return
+            raise exc.GraphException("'{0}' is already in project".format(filename))
         if not filename.endswith(".xml"):
-            self.fire("error", "'{0}' is invalid graph filename".format(filename))
-            return
+            raise exc.GraphException("'{0}' is invalid graph filename".format(filename))
         if not os.path.exists(filename):
-            self.fire("error", "'{0}' not exists".format(filename))
-            return
+            raise exc.GraphException ("'{0}' not exists".format(filename))
 
         try:
             self.graph_manager.add_graph_file(filename)
             self.saved = False
-            return True
         except exc.GraphException as ex:
-            self.fire("error", ex.message)
+            raise ex
 
     def remove_file(self, filename):
         self.saved = False

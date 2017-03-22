@@ -16,12 +16,12 @@ class Statistics():
         self.ls = liststore
         self.props = {} # key -> property key, value -> path
 
-    def add_prop(self, property):
-        i = self.ls.append(property.parent, [property.id + ": ",
-                                             property.value,
-                                             property.tooltip])
+    def add_prop(self, prop):
+        i = self.ls.append(prop.parent, [prop.id + ": ",
+                                             prop.value,
+                                             prop.tooltip])
         path = self.ls.get_path(i)
-        self.props[property.key] = (path, property)
+        self.props[prop.key] = (path, prop)
         return i
 
     def update_prop(self, prop_key, new_val):
@@ -215,7 +215,7 @@ class SimulationStatistics(Statistics):
             mem_monitor = mm.get_process_monitor(pr.id, "MemoryMonitor")
             mem_usage_entry = "memory_usage"
             data = mem_monitor.collect([mem_usage_entry])
-            for sim_time, size in data[mem_usage_entry]:
+            for _, size in data[mem_usage_entry]:
                 if size > memory_peak:
                     memory_peak = size
 

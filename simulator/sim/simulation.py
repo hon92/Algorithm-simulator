@@ -1,12 +1,12 @@
 import simpy
-from gui import events
-from sim.processes.process import ProcessContext
-from sim.processes.monitor import MonitorManager
-from sim.processfactory import process_factory as pf
-from gui.graphstats import GraphStats, VisualGraphStats
+from simulator.gui import events
+from processes.process import ProcessContext
+from processes.monitor import MonitorManager
+from simulator.gui.graphstats import GraphStats, VisualGraphStats
 from processes.monitor import GlobalTimeMonitor, GlobalMemoryMonitor
-from sim.processes.process import StorageProcess
-from src.sim.processes.monitor import GlobalStorageMonitor
+from processes.process import StorageProcess
+from processes.monitor import GlobalStorageMonitor
+from processfactory import process_factory as pf
 
 
 class AbstractSimulation(events.EventSource):

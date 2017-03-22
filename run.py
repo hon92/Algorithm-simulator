@@ -2,8 +2,6 @@
 
 if __name__ == '__main__':
     import sys
-    from src.gui import app
-    from src.gui import settings
-    settings.init()
+    from simulator.gui import app
     app = app.App(sys.argv[1:])
     app.run()
