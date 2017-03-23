@@ -3,7 +3,10 @@ from simulator.gui.events import EventSource
 
 
 class MonitorManager():
-
+    """
+    Monitor manager responsible for all monitors
+    which are in simulation.
+    """
     REGEX = "(^p)(\d+)(_)(\w+)"
 
     def __init__(self):
@@ -31,6 +34,16 @@ class MonitorManager():
         self.add_callback(event_name, object)
 
     def connect(self, event_name, callback):
+        """
+        Add listener to 'event_name' and call 'callback' function
+        when event occur with parameters based on 'event_name'.
+
+        :param: event_name: name of event
+        :type: str
+        :param: callback: function callback with required parameters\
+        based on event name
+        :type: Function
+        """
         m = re.match(self.REGEX, event_name)
         if m:
             pid = int(m.group(2))
@@ -57,12 +70,26 @@ class MonitorManager():
             object.connect(event_name, callback)
 
     def register_monitor(self, monitor):
+        """
+        Register global monitor to simulation.
+
+        :param: monitor: global monitor
+        :type: MonitorBase
+        """
         m = self.global_monitors.get(monitor.get_id())
         if m:
             raise Exception("Cant register more same global monitors")
         self.global_monitors[monitor.get_id()] = monitor
 
     def register_process_monitor(self, pid, monitor):
+        """
+        Register monitor to specific process.
+
+        :param: pid: id of process
+        :type: int
+        :param: monitor: monitor for process
+        :type: Monitor
+        """
         if pid not in self.monitors:
             self.monitors[pid] = [monitor]
         else:
@@ -107,6 +134,9 @@ class MonitorManager():
 
 
 class Entry():
+    """
+    Entry consists of measured values.
+    """
     def __init__(self, entry_name, args):
         self.entry_name = entry_name
         self.args = args
@@ -116,6 +146,12 @@ class Entry():
 
 
 class MonitorBase(EventSource):
+    """
+    Class for global monitor.
+
+    :param: id: name of monitor
+    :type: str
+    """
     def __init__(self, id):
         EventSource.__init__(self)
         self.register_event("entry_put")
@@ -156,12 +192,21 @@ class MonitorBase(EventSource):
 
 
 class Monitor(MonitorBase):
+    """
+    Monitor for specific process.
+
+    :param: process: process
+    :type: Process
+    """
     def __init__(self, id, process):
         MonitorBase.__init__(self, id)
         self.process = process
 
 
 class ClockMonitor(Monitor):
+    """
+    Monitor for Clock in process.
+    """
     def __init__(self, process):
         Monitor.__init__(self, "ClockMonitor", process)
         self.add_entry("time_stamp",
@@ -181,6 +226,9 @@ class ClockMonitor(Monitor):
 
 
 class MemoryMonitor(Monitor):
+    """
+    Monitor for measure used memory in process.
+    """
     def __init__(self, process):
         Monitor.__init__(self, "MemoryMonitor", process)
         self.add_entry("memory_usage", "simulation_time", "memory_usage")
@@ -193,6 +241,9 @@ class MemoryMonitor(Monitor):
 
 
 class StorageMonitor(Monitor):
+    """
+    Monitor for Storage in process.
+    """
     def __init__(self, process):
         Monitor.__init__(self, "StorageMonitor", process)
         self.add_entry("changed",
@@ -220,6 +271,9 @@ class StorageMonitor(Monitor):
 
 
 class ProcessMonitor(Monitor):
+    """
+    Monitor for measure process activity.
+    """
     def __init__(self, process):
         Monitor.__init__(self, "ProcessMonitor", process)
         self.add_entry("wait",
@@ -244,6 +298,9 @@ class ProcessMonitor(Monitor):
 
 
 class EdgeMonitor(Monitor):
+    """
+    Monitor for measure edges in graph for process.
+    """
     def __init__(self, process):
         Monitor.__init__(self, "EdgeMonitor", process)
         self.add_entry("edge_discovered",
@@ -314,6 +371,9 @@ class EdgeMonitor(Monitor):
 
 
 class CommunicationMonitor(Monitor):
+    """
+    Monitor for measure process communication.
+    """
     def __init__(self, process):
         Monitor.__init__(self, "CommunicationMonitor", process)
         self.add_entry("send",
@@ -367,6 +427,9 @@ class CommunicationMonitor(Monitor):
 
 
 class GlobalTimeMonitor(MonitorBase):
+    """
+    Global monitor for measure simulation timing.
+    """
     def __init__(self):
         MonitorBase.__init__(self, "GlobalTimeMonitor")
         self.register_event("timeout")
@@ -382,6 +445,9 @@ class GlobalTimeMonitor(MonitorBase):
 
 
 class GlobalMemoryMonitor(MonitorBase):
+    """
+    Global monitor for measure global memory usage in simulation.
+    """
     def __init__(self, global_time_monitor, processes):
         MonitorBase.__init__(self, "GlobalMemoryMonitor")
         self.add_entry("memory_usage",
@@ -398,6 +464,9 @@ class GlobalMemoryMonitor(MonitorBase):
 
 
 class GlobalStorageMonitor(MonitorBase):
+    """
+    Global monitor for measure Storage through simulation.
+    """
     def __init__(self, processes):
         MonitorBase.__init__(self, "GlobalStorageMonitor")
         self.add_entry("changed",

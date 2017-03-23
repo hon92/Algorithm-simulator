@@ -10,6 +10,9 @@ from processes import model
 
 
 class ProcessFactory(EventSource):
+    """
+    Class responsible for loading algorithms and models.
+    """
     def __init__(self):
         EventSource.__init__(self)
         self.register_event("algorithm_added")
@@ -140,11 +143,23 @@ class ProcessFactory(EventSource):
         return classes
 
     def add_network_model(self, model):
+        """
+        Add network model to simulator.
+
+        :param: model: new network model
+        :type: NetworkModel
+        """
         if not self.network_models.get(model.get_name()):
             self.network_models[model.get_name()] = model
             self.fire("network_model_added", self, model)
 
     def add_process_model(self, model):
+        """
+        Add process model to simulator.
+
+        :param: model: new process model
+        :type: ProcessModel
+        """
         if not self.process_models.get(model.get_name()):
             self.process_models[model.get_name()] = model
             self.fire("process_model_added", self, model)
