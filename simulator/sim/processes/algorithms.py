@@ -48,9 +48,10 @@ task to another process which is waiting for work."
 
 class Algorithm2(process.StorageProcess):
 
-    NAME = "SpinProcess"
-    DESCRIPTION = "Spin process uses 'partition' function which deside where the process \
-send new task."
+    NAME = "Algorithm 2"
+    DESCRIPTION = "Algorithm implemented according to the Spin algorithm. \
+Algorithm uses 'partition' function for deciding, which \
+process should utilize new node."
     PARAMS = {}
 
     def __init__(self, id, ctx):
@@ -92,7 +93,8 @@ send new task."
 class Algorithm3(process.StorageProcess):
 
     NAME = "Algorithm 3"
-    DESCRIPTION = "Sending new node to next process"
+    DESCRIPTION = "Process send new discovered node to \
+next process in simulation for utilize that node."
     PARAMS = {}
 
     def __init__(self, id, ctx):
@@ -131,8 +133,8 @@ class Algorithm3(process.StorageProcess):
 
 class Aislinn(process.StorageProcess):
 
-    NAME = "Aislinn"
-    DESCRIPTION = "Algorithm with similar implementation like in tool Aislinn"
+    NAME = "Algorithm 4"
+    DESCRIPTION = "Algorithm with similar implementation like in tool Aislinn."
     PARAMS = {}
 
     def __init__(self, id, ctx):
