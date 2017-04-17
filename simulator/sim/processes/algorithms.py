@@ -90,9 +90,10 @@ process should utilize new node."
         return 0
 
 
-class Algorithm3(process.StorageProcess):
 
-    NAME = "Algorithm 3"
+class Algorithm4(process.StorageProcess):
+
+    NAME = "Algorithm 4"
     DESCRIPTION = "Process send new discovered node to \
 next process in simulation for utilize that node."
     PARAMS = {}
@@ -131,9 +132,9 @@ next process in simulation for utilize that node."
                 yield self.wait()
 
 
-class Aislinn(process.StorageProcess):
+class Algorithm3(process.StorageProcess):
 
-    NAME = "Algorithm 4"
+    NAME = "Algorithm 3"
     DESCRIPTION = "Algorithm with similar implementation like in tool Aislinn."
     PARAMS = {}
 
