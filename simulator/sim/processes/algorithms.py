@@ -127,49 +127,6 @@ class Algorithm3(process.StorageProcess):
                 yield self.wait()
 
 
-class PingPongExample(process.StorageProcess):
-
-    NAME = "PingPong"
-    DESCRIPTION = "Example of using blocking 'send' and 'receive' message in process"
-    PARAMS = {}
-
-    def __init__(self, id, ctx):
-        process.StorageProcess.__init__(self, id, self.NAME, ctx, process.QueueStorage(self))
-
-    def init(self):
-        pass
-
-    def run(self):
-        process_count = len(self.ctx.processes)
-        if process_count < 2:
-            self.log("need atleast two processes for pingpong", "err")
-            yield self.wait()
-
-        PING_PONG_LIMIT = 10
-        world_rank = self.id
-        ping_pong_count = 0
-        partner_rank = (world_rank + 1) % 2
-        while (ping_pong_count < PING_PONG_LIMIT):
-            if (world_rank == ping_pong_count % 2):
-                ping_pong_count += 1
-                self.log("pr {0} sended in {1}".format(self.id, self.ctx.env.now))
-                
-                self.log("{0} send incremented value {1} to process {2}".format(world_rank,
-                                                                                ping_pong_count,
-                                                                                partner_rank))
-                yield self.communicator.send(ping_pong_count, partner_rank)
-                self.log("pr {0} sended con {1}".format(self.id, self.ctx.env.now))
-            else:
-                val = yield self.communicator.receive(partner_rank)
-                if val:
-                    val = val.data
-                    ping_pong_count = val
-                    self.log("pr {0} rec in {1}".format(self.id, self.ctx.env.now))
-                    self.log("{0} received {1} from process {2}".format(world_rank,
-                                                                        ping_pong_count,
-                                                                        partner_rank))
-
-
 class Aislinn(process.StorageProcess):
 
     NAME = "Aislinn"
