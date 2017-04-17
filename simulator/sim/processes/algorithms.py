@@ -91,7 +91,7 @@ send new task."
 
 class Algorithm3(process.StorageProcess):
 
-    NAME = "Alg 3"
+    NAME = "Algorithm 3"
     DESCRIPTION = "Sending new node to next process"
     PARAMS = {}
 
