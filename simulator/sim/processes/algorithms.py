@@ -163,8 +163,10 @@ class Algorithm3(process.StorageProcess):
                    storage.get_size() == 0):
                 target = (yield self.communicator.receive()).data
                 storage.put(target)
+                self.counter += 1
 
             size = storage.get_size()
+
             assert self.counter == size, "counter != size"
             (node, edge) = storage.get()
             self.counter -= 1
@@ -174,13 +176,16 @@ class Algorithm3(process.StorageProcess):
                 for i in xrange(1, len(processes)):
                     pid = (self.get_id() + i) % len(processes)
                     if processes[pid].counter == 0:
-                        processes[pid].counter = 1
+                        #processes[pid].counter = 1
                         self.log("RESEND: " + str(self.get_id()) + " " + str(pid))
                         yield self.communicator.send((node, edge), pid)
                         resend = True
                         break
                 if resend:
                     resend = True
+
+            if gs.is_edge_discovered(edge):
+                continue
 
             yield self.solve_edge(edge)
             target = edge.get_target()
