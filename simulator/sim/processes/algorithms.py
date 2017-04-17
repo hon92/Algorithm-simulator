@@ -112,14 +112,16 @@ class Algorithm3(process.StorageProcess):
             if self.storage.get_size() > 0:
                 node = self.storage.get()
                 for edge in node.get_edges():
-                    yield self.solve_edge(edge)
+                    if not gs.is_edge_discovered(edge):
+                        yield self.solve_edge(edge)
+
                     new_node = edge.get_target()
                     if not gs.is_node_discovered(new_node):
-                        next = self.id + 1 % process_count
+                        next = (self.id + 1) % process_count
                         if next != self.id:
-                            yield self.communicator.async_send(new_node, next)
                             pr = self.ctx.processes[next]
                             gs.discover_node(new_node, pr)
+                            yield self.communicator.async_send(new_node, next)
                         else:
                             gs.discover_node(new_node, self)
                         self.storage.put(new_node)
