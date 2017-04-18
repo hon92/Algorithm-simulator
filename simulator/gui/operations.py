@@ -107,6 +107,7 @@ class ScalabilityDialog(Operation):
 
         def show_params(parameters_vbox, params):
             parameters_vbox.foreach(lambda child: parameters_vbox.remove(child))
+            self.params = []
 
             if len(params) == 0:
                 hb = gtk.HBox()
@@ -115,7 +116,6 @@ class ScalabilityDialog(Operation):
                 parameters_vbox.show_all()
                 return
 
-            self.params = []
             for param, (value, param_type) in params.iteritems():
                 hbox = gtk.HBox()
                 hbox.pack_start(gtk.Label(param))
