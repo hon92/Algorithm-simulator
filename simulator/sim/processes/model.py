@@ -139,13 +139,13 @@ class SlowNetworkModel(LinearNetworkModel):
         return "Slow network"
 
     def get_description(self):
-        return "Modeling slow network communication"
+        return "Modeling slow network with 30ms latency and speed 100Mbit/s."
 
     def get_latency(self):
-        return 1.88
+        return 0.03
 
     def get_speed(self):
-        return 1.2
+        return 0.00001
 
 
 class SlowProcessModel(ProcessModel):
